@@ -1,0 +1,4 @@
+../Core/Src/spsgrf.c:21:6:SPSGRF_Init	96	static
+../Core/Src/spsgrf.c:164:6:SPSGRF_StartTx	16	static
+../Core/Src/spsgrf.c:184:6:SPSGRF_StartRx	8	static
+../Core/Src/spsgrf.c:195:9:SPSGRF_GetRxData	24	static
