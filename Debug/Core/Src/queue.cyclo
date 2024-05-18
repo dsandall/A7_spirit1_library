@@ -1,0 +1,7 @@
+../Core/Src/queue.c:7:12:createNode	1
+../Core/Src/queue.c:19:6:initializeQueue	1
+../Core/Src/queue.c:25:6:isEmpty	1
+../Core/Src/queue.c:30:6:enqueue	2
+../Core/Src/queue.c:41:5:dequeue	3
+../Core/Src/queue.c:58:5:front	2
+../Core/Src/queue.c:67:5:rear	2

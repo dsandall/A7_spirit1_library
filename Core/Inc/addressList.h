@@ -28,7 +28,11 @@
 #define	J_RAMIREZ	0xA2
 #define	D_ROBERDS	0xC1
 #define	D_ROLAND	0x6F
-#define	D_SANDALL	0xB0
+#define	D_SANDALL	0xB0 //176
 #define	S_SELTZER	0x60
 #define	J_SHAFFER	0x3F
 #define	M_WONG		0xA0
+
+#include <stdio.h>
+
+#define MAX_INDEX 0xC9

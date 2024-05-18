@@ -53,7 +53,7 @@
 #define EN_FILT_MY_ADDRESS          S_ENABLE
 #define EN_FILT_MULTICAST_ADDRESS   S_ENABLE
 #define EN_FILT_BROADCAST_ADDRESS   S_ENABLE
-#define MY_ADDRESS                  D_SANDALL //0x44
+#define MY_ADDRESS                  D_SANDALL //0xB0 //176
 #define MULTICAST_ADDRESS           0xEE
 #define BROADCAST_ADDRESS           0xFF
 

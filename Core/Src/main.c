@@ -22,6 +22,7 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
+#include "queue.h"
 
 
 /* Private includes ----------------------------------------------------------*/
@@ -105,6 +106,52 @@ void MX_FREERTOS_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+#define MAX_INDEX 0xC9
+
+const char* names[MAX_INDEX + 1] = {
+    [J_MANESH]    = "J_MANESH",
+    [N_MASTEN]    = "N_MASTEN",
+    [M_PROVINCE]  = "M_PROVINCE",
+    [J_KRAMMER]   = "J_KRAMMER",
+    [N_DELAPENA]  = "N_DELAPENA",
+    [J_GALICINAO] = "J_GALICINAO",
+    [J_PARK]      = "J_PARK",
+    [S_MARTIN]    = "S_MARTIN",
+    [A_GROTE]     = "A_GROTE",
+    [M_NOON]      = "M_NOON",
+    [J_SHAFFER]   = "J_SHAFFER",
+    [D_PETERS]    = "D_PETERS",
+    [S_SELTZER]   = "S_SELTZER",
+    [W_COLBURN]   = "W_COLBURN",
+    [L_CAPUTI]    = "L_CAPUTI",
+    [D_ROLAND]    = "D_ROLAND",
+    [A_DOSANJH]   = "A_DOSANJH",
+    [A_RAJESH]    = "A_RAJESH",
+    [M_FESLER]    = "M_FESLER",
+    [B_KENNEDY]   = "B_KENNEDY",
+    [D_CURIEL]    = "D_CURIEL",
+    [L_PEDROZA]   = "L_PEDROZA",
+    [M_HERRERA]   = "M_HERRERA",
+    [H_EVANS]     = "H_EVANS",
+    [L_MCCARTHY]  = "L_MCCARTHY",
+    [R_LEONTINI]  = "R_LEONTINI",
+    [M_WONG]      = "M_WONG",
+    [J_RAMIREZ]   = "J_RAMIREZ",
+    [D_CALDERA]   = "D_CALDERA",
+    [D_SANDALL]   = "D_SANDALL",
+    [C_BAE]       = "C_BAE",
+    [D_ROBERDS]   = "D_ROBERDS",
+    [P_MULPURU]   = "P_MULPURU",
+    [T_GREEN]     = "T_GREEN"
+};
+
+const char* getName(int hex) {
+    if (hex <= MAX_INDEX && names[hex] != NULL) {
+        return names[hex];
+    } else {
+        return NULL;  // Indicating the hex is not found
+    }
+}
 
 void myHAL_UART_printf(const char* format, ...) {
 	va_list args;
@@ -194,10 +241,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 
 //TX//////////////
-char TXpayload[] = " Beep beep bloop bloop\r\n";
+char TXpayload[] = "3kwikskoped";
 
 void confirm_TX(){
-    myHAL_UART_printf("payload sent: %s", TXpayload);
+    myHAL_UART_printf("payload sent: %s\r\n", TXpayload);
 }
 
 
@@ -212,7 +259,7 @@ void Task_TX(void *argument){
 			SPSGRF_StartTx(TXpayload, strlen(TXpayload));
 		  }
 
-		  vTaskDelay(5000);
+		  vTaskDelay(20000);
 
 	  }
 }
@@ -225,16 +272,18 @@ void printUsersOnline(){
 	myHAL_UART_printf("--- Users Online @t=%d:\r\n", (currentTime-startTime)/1000);
 	for (int i = 0; i < 256; i++){
 		if (usersOnline[i].address != 0){
-			myHAL_UART_printf("- 0x%x(%d) seen %d s ago\r\n", usersOnline[i].address, usersOnline[i].address, (currentTime - usersOnline[i].timeLastSeen)/1000);
+			myHAL_UART_printf("- 0x%x(%d)(%s) seen %d s ago\r\n", usersOnline[i].address, usersOnline[i].address, names[usersOnline[i].address], (currentTime - usersOnline[i].timeLastSeen)/1000);
 		}
 	}
 }
+
+#define USER_DEAD_TIME 110
 
 void reapUsers(){
 	TickType_t currentTime = xTaskGetTickCount();
 	for (int i = 0; i < 256; i++){
 		if ((usersOnline[i].address != 0)){
-			if((currentTime-usersOnline[i].timeLastSeen)/1000 > 30){
+			if((currentTime-usersOnline[i].timeLastSeen)/1000 > USER_DEAD_TIME){
 				myHAL_UART_printf("reaping user 0x%x\r\n", usersOnline[i].address);
 				usersOnline[i].address = 0;
 				usersOnline[i].timeLastSeen = 0;
