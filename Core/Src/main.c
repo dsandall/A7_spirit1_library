@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
 
 
@@ -147,20 +148,20 @@ const char* names[MAX_INDEX + 1] = {
 };
 
 typedef struct {
-	int valid;
-	int type;
+	bool valid;
+	uint8_t type;
 	char* user;
 	char* message;
 	uint8_t dest;
 }Payload;
 
-const char* getName(int hex) {
-    if (hex <= MAX_INDEX && names[hex] != NULL) {
-        return names[hex];
-    } else {
-        return NULL;  // Indicating the hex is not found
-    }
-}
+//const char* getName(int hex) {
+//    if (hex <= MAX_INDEX && names[hex] != NULL) {
+//        return names[hex];
+//    } else {
+//        return NULL;  // Indicating the hex is not found
+//    }
+//}
 
 void myHAL_UART_printf(const char* format, ...) {
 	va_list args;
@@ -273,8 +274,8 @@ void confirm_TX(){
 
 void Task_TX(void *argument){
 	char loadString[100]; //NOT a string
-	  while (1)
-	  {
+	while (1)
+	{
 
 
 		  if(TXq[currentReadTX].valid){
@@ -285,8 +286,8 @@ void Task_TX(void *argument){
 				SpiritPktStackSetDestinationAddress(TXq[currentReadTX].dest);
 
 
-				int type = TXq[currentReadTX].type;
-				int len = 1+strlen(myUsername)+1;
+				uint8_t type = TXq[currentReadTX].type;
+				uint16_t len = 1+strlen(myUsername)+1;
 				loadString[0] = type;
 				strcpy(&loadString[1], myUsername);
 				if (type == 4){
@@ -296,12 +297,13 @@ void Task_TX(void *argument){
 				TXq[currentReadTX].valid = 0;
 				SPSGRF_StartTx(loadString, len);
 			  }
-//			  vTaskDelay(1000);
-
+		//			  vTaskDelay(1000);
 		  }
+
 		  vTaskDelay(50);
 
-	  }
+
+ }
 }
 
 
@@ -345,26 +347,55 @@ void Task_printUsers(void *argument){
 // This should: determine type of recieved packet, add node to onlinelist, send ACKS, print if message
 
 void get_RX(){
+
+
 	uint8_t sadd = SpiritPktStackGetReceivedSourceAddress();
 	uint8_t RXpayload[100];
-	RXpayload[0] = 0;
-	RXpayload[1] = 0;
-	RXpayload[2] = 0;
-	RXpayload[3] = 0;
-	RXpayload[4] = 0;
-	RXpayload[5] = 0;
 
+	//for all cases, update node info
 	usersOnline[sadd].timeLastSeen = xTaskGetTickCount();
 	usersOnline[sadd].address = sadd;
 
+
+	//get payload info and sanitize payloads
 	int rxLen = SPSGRF_GetRxData(&RXpayload);
-	RXpayload[rxLen+1] = '\0';
+	RXpayload[rxLen+1] = '\0'; //ensure null termination for bad little nodes
 
-	HAL_UART_Transmit(&huart2, "Received: ", 10, HAL_MAX_DELAY);
 
-	myHAL_UART_printf("%02X:%02X:%02X:%02X from 0x%x", RXpayload[0], RXpayload[1], RXpayload[2], RXpayload[3], sadd);
+	//if announcement, send ack
+	//if ack, do nothing
+	//if heartbeat, do nothing
+	//if message, print message
+	//and check for bad payloads
 
-	HAL_UART_Transmit(&huart2, "\r\n", 2, HAL_MAX_DELAY);
+	if(RXpayload[0] == PACKET_ANNOUNCEMENT){
+		// send ack
+		createPayload(PACKET_ANNOUNCEMENT_RESP, myUsername, NULL, sadd);
+
+	} else if (RXpayload[0] == PACKET_MESSAGE) {
+		//print message
+		char* i = (char*)RXpayload;
+		while(*i != '\0'){i++;}
+		i++;
+		myHAL_UART_printf("Message from 0x%x(%s): %s", sadd, names[sadd], i);
+
+	} else if ((RXpayload[0] == PACKET_ANNOUNCEMENT_RESP) | (RXpayload[0] == PACKET_HEARTBEAT)){
+		//do nothing
+		if(RXpayload[0] == PACKET_HEARTBEAT){
+			myHAL_UART_printf("<3beat from 0x%x\r\n", sadd);
+		} else {
+			myHAL_UART_printf("ACK by 0x%x\r\n", sadd);
+		}
+
+	} else{
+		//todo:untested case
+		myHAL_UART_printf("Bad Packet(%02X:%02X:%02X:%02X) from 0x%x(%d)(%s)\r\n",
+				RXpayload[0], RXpayload[1], RXpayload[2], RXpayload[3],
+				sadd, sadd, names[sadd]);
+	}
+
+
+//	HAL_UART_Transmit(&huart2, "\r\n", 2, HAL_MAX_DELAY);
 
 }
 
@@ -374,21 +405,25 @@ void Task_RX(void *argument){
 		if(xSemaphoreTake(FLAG_SPIRIT, 10) == 1){
 		  SPSGRF_StartRx();
 		}
+		vTaskDelay(10);
 	}
 }
 /* USER CODE END 0 */
 
 
 void Task_BeatHeart(void *argument){
+	vTaskDelay(5000);
 	while(1){
-		createPayload(PACKET_HEARTBEAT, myUsername, NULL);
+		createPayload(PACKET_HEARTBEAT, myUsername, NULL, 0xFF);
 		vTaskDelay(5000);
 	}
 }
 
 void createPayload(int type, char* username, char* message, uint8_t dest){
-	currentWriteTX = (++currentWriteTX) %TX_Q_SIZE;
+
 	int myWriteTX = currentWriteTX;
+	currentWriteTX = (++currentWriteTX) %TX_Q_SIZE;
+
 	TXq[myWriteTX].type = type;
 	TXq[myWriteTX].user = username;
 
@@ -435,9 +470,9 @@ int main(void)
   		NULL, tskIDLE_PRIORITY + 4, &Task_TXHandler);
   if (retVal != 1) { while(1);}	// check if task creation failed
 
-  retVal = xTaskCreate(Task_printUsers, "Task_printUsers", configMINIMAL_STACK_SIZE,
-  		NULL, tskIDLE_PRIORITY + 2, &Task_printUsersHandler);
-  if (retVal != 1) { while(1);}	// check if task creation failed
+//  retVal = xTaskCreate(Task_printUsers, "Task_printUsers", configMINIMAL_STACK_SIZE,
+//  		NULL, tskIDLE_PRIORITY + 2, &Task_printUsersHandler);
+//  if (retVal != 1) { while(1);}	// check if task creation failed
 
   retVal = xTaskCreate(Task_RX, "Task_RX", configMINIMAL_STACK_SIZE,
   		NULL, tskIDLE_PRIORITY + 3, &Task_RXHandler);
@@ -454,10 +489,9 @@ int main(void)
 
 
 
-  //Initialization transmissisons
-  TXq[0].type = PACKET_HEARTBEAT;
-  TXq[0].user = myUsername;
-  TXq[0].valid = 1;
+//  //Initialization transmissisons
+
+  createPayload(PACKET_ANNOUNCEMENT, myUsername, NULL, 0xFF);
 
 
   /* USER CODE END SysInit */
@@ -520,6 +554,35 @@ void USART2_IRQHandler(void){
 	}
 }
 
+void impersonate(uint8_t skin){
+	//change username and address to a desired person's
+
+	SpiritGotoReadyState();
+
+	 uint8_t tempRegValue[3];
+
+//	  /* Check the parameters */
+//	  s_assert_param(IS_SPIRIT_FUNCTIONAL_STATE(pxPktStackAddresses->xFilterOnMyAddress));
+//	  s_assert_param(IS_SPIRIT_FUNCTIONAL_STATE(pxPktStackAddresses->xFilterOnMulticastAddress));
+//	  s_assert_param(IS_SPIRIT_FUNCTIONAL_STATE(pxPktStackAddresses->xFilterOnBroadcastAddress));
+//
+//	  /* Reads the filtering options ragister */
+//	  g_xStatus = SpiritSpiReadRegisters(PCKT_FLT_OPTIONS_BASE, 1, &tempRegValue[0]);
+//
+//
+//	  /* Writes value on the register */
+//	  g_xStatus = SpiritSpiWriteRegisters(PCKT_FLT_OPTIONS_BASE, 1, &tempRegValue[0]);
+
+	  /* Fills array with the addresses passed in the structure */
+	  tempRegValue[0] = BROADCAST_ADDRESS;
+	  tempRegValue[1] = MULTICAST_ADDRESS;
+	  tempRegValue[2] = skin;
+
+	  /* Writes them on the addresses registers */
+	  g_xStatus = SpiritSpiWriteRegisters(PCKT_FLT_GOALS_BROADCAST_BASE, 3, tempRegValue);
+
+}
+
 void handleCommand(char* input){
 	//this is after the string has been entered and the user hits enter
 	myHAL_UART_printf("                              entered: (%s) \r\n", userInput);
@@ -528,25 +591,35 @@ void handleCommand(char* input){
 	if (userInput[0] == '/'){
 
 		switch (userInput[1]) {
-			case 'u':
+
+			case 'u': 	//list online users
 				printUsersOnline();
 				reapUsers();
 				break;
-			case 'b':
+
+			case 'b':	//broadcast message
+				createPayload(PACKET_MESSAGE, myUsername, userInput, 0xFF);
 				break;
-			case 'p':
+
+			case 'p':	//private message
+				//TODO:get address from command and pass it here
+				createPayload(PACKET_MESSAGE, myUsername, userInput, 0xFF);
 				break;
-			case 'i':
+
+			case 'i':	//impersonate
+				char hexStr[3];
+				hexStr[0] = userInput[2]; hexStr[1] = userInput[3]; hexStr[2] = '\0';
+				impersonate((uint8_t)strtol(hexStr, NULL, 16));
 				break;
-			default:
+
+			default: 	//Bad command
+				myHAL_UART_printf("                              Bad command: (%s) \r\n", userInput);
 				break;
 		}
 
-
-
 	} else {
 		//else just assume it's a broadcast message
-		createPayload(PACKET_MESSAGE, myUsername, userInput);
+		createPayload(PACKET_MESSAGE, myUsername, userInput, 0xFF);
 	}
 
 }
