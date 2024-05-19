@@ -146,6 +146,14 @@ const char* names[MAX_INDEX + 1] = {
 	[DEEZ_NUTZ]   = "DEEZ_NUTZ"
 };
 
+typedef struct {
+	int valid;
+	int type;
+	char* user;
+	char* message;
+	uint8_t dest;
+}Payload;
+
 const char* getName(int hex) {
     if (hex <= MAX_INDEX && names[hex] != NULL) {
         return names[hex];
@@ -227,7 +235,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
   if (xIrqStatus.IRQ_RX_DATA_DISC)
   {
-	myHAL_UART_printf("  | || || |_\r\n");
+//	myHAL_UART_printf("  | || || |_\r\n");
   }
 
   if (xIrqStatus.IRQ_RX_TIMEOUT){
@@ -242,23 +250,27 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 
 //TX//////////////
-char TXpayload[] = "3kwikskoped";
+#define TX_Q_SIZE 3
+
+Payload TXq[TX_Q_SIZE];
+int currentReadTX;
+int currentWriteTX;
 
 void confirm_TX(){
-    myHAL_UART_printf("payload sent: %s\r\n", TXpayload);
+
+	if(TXq[currentReadTX].type == 4){
+	    myHAL_UART_printf("message sent: %s \r\n", TXq[currentReadTX].message);
+	} else {
+	    myHAL_UART_printf("payload sent: type(%d) %s \r\n", TXq[currentReadTX].type, TXq[currentReadTX].user);
+	}
+
+	currentReadTX = (++currentReadTX) %TX_Q_SIZE;
 }
 
 
-typedef struct {
-	int valid;
-	int type;
-	char* user;
-	char* message;
-}Payload;
 
-Payload TXq[66];
-int currentReadTX;
-int currentWriteTX;
+
+
 void Task_TX(void *argument){
 	char loadString[100]; //NOT a string
 	  while (1)
@@ -269,21 +281,22 @@ void Task_TX(void *argument){
 
 			  SpiritGotoReadyState(); //interrupt any other thang going down
 			  if(xSemaphoreTake(FLAG_SPIRIT, 10) == 1){
-//				TXpayload[0] = PACKET_HEARTBEAT; //set heartbeat type
+
+				SpiritPktStackSetDestinationAddress(TXq[currentReadTX].dest);
+
 
 				int type = TXq[currentReadTX].type;
 				int len = 1+strlen(myUsername)+1;
 				loadString[0] = type;
 				strcpy(&loadString[1], myUsername);
 				if (type == 4){
-					strcpy(&loadString[strlen(myUsername)+1], TXq[currentReadTX].message);
-					len = 1+ strlen(myUsername)+1+strlen(TXq[currentReadTX].message);
+					strcpy(&loadString[strlen(myUsername)+1+1], TXq[currentReadTX].message);
+					len = 1+ strlen(myUsername)+1+1+strlen(TXq[currentReadTX].message);
 				}
-
-				currentReadTX++;
+				TXq[currentReadTX].valid = 0;
 				SPSGRF_StartTx(loadString, len);
 			  }
-			  vTaskDelay(1000);
+//			  vTaskDelay(1000);
 
 		  }
 		  vTaskDelay(50);
@@ -322,13 +335,15 @@ void reapUsers(){
 
 void Task_printUsers(void *argument){
 	while (1){
-	  reapUsers();
-	  printUsersOnline();
+//	  reapUsers();
+//	  printUsersOnline();
 	  vTaskDelay(3500);
 	}
 }
 
 //RX//////////////
+// This should: determine type of recieved packet, add node to onlinelist, send ACKS, print if message
+
 void get_RX(){
 	uint8_t sadd = SpiritPktStackGetReceivedSourceAddress();
 	uint8_t RXpayload[100];
@@ -353,11 +368,6 @@ void get_RX(){
 
 }
 
-void printPacket(uint8_t * packet){
-	//byte 0 - heart beat
-	//byte 1-21 - another
-	//byte 22-272 - another one
-}
 
 void Task_RX(void *argument){
 	while(1){
@@ -371,12 +381,23 @@ void Task_RX(void *argument){
 
 void Task_BeatHeart(void *argument){
 	while(1){
-		currentWriteTX++;
-		TXq[currentWriteTX].type = PACKET_HEARTBEAT;
-		TXq[currentWriteTX].user = myUsername;
-		TXq[currentWriteTX].valid = 1;
+		createPayload(PACKET_HEARTBEAT, myUsername, NULL);
 		vTaskDelay(5000);
 	}
+}
+
+void createPayload(int type, char* username, char* message, uint8_t dest){
+	currentWriteTX = (++currentWriteTX) %TX_Q_SIZE;
+	int myWriteTX = currentWriteTX;
+	TXq[myWriteTX].type = type;
+	TXq[myWriteTX].user = username;
+
+	if(type == 4){
+		TXq[myWriteTX].message = message;
+	}
+
+	TXq[myWriteTX].dest = dest;
+	TXq[myWriteTX].valid = 1;
 }
 
 
@@ -457,7 +478,7 @@ int main(void)
   startTime = xTaskGetTickCount();
 
   myHAL_UART_clear();
-  myHAL_UART_printf("let's goooo");
+  myHAL_UART_printf("let's goooo \r\n");
 
   SPSGRF_Init();
 
@@ -483,19 +504,51 @@ void USART2_IRQHandler(void){
 		if (r != 13){
 			//NOT enter
 			userInput[userInputPos++] = r;
+			HAL_UART_Transmit(&huart2, &r, 1, HAL_MAX_DELAY);
 
 		} else {
 			//enter
 			userInput[userInputPos] = '\0';
 			userInputPos = 0;
-			myHAL_UART_printf("entered: (%s) \r\n", userInput);
+			HAL_UART_Transmit(&huart2, &r, 1, HAL_MAX_DELAY);
+
+			handleCommand(userInput);
 
 		}
 
-		HAL_UART_Transmit(&huart2, &r, 1, HAL_MAX_DELAY);
-
 		USART2->ISR &= ~(USART_ISR_RXNE); // clear the flag
 	}
+}
+
+void handleCommand(char* input){
+	//this is after the string has been entered and the user hits enter
+	myHAL_UART_printf("                              entered: (%s) \r\n", userInput);
+
+
+	if (userInput[0] == '/'){
+
+		switch (userInput[1]) {
+			case 'u':
+				printUsersOnline();
+				reapUsers();
+				break;
+			case 'b':
+				break;
+			case 'p':
+				break;
+			case 'i':
+				break;
+			default:
+				break;
+		}
+
+
+
+	} else {
+		//else just assume it's a broadcast message
+		createPayload(PACKET_MESSAGE, myUsername, userInput);
+	}
+
 }
 
 
