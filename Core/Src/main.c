@@ -42,16 +42,14 @@ void Task_TX(void *argument);
 void Task_printUsers(void *argument);
 void Task_RX(void *argument);
 
-TaskHandle_t Task_TXHandler, Task_printUsersHandler, Task_RXHandler, Task_HBHandler;
+TaskHandle_t Task_TXHandler, Task_RXHandler, Task_HBHandler;
 SemaphoreHandle_t FLAG_SPIRIT;
 
 void RTOS_ISR_setPriority(uint32_t IRQn){
 	HAL_NVIC_SetPriorityGrouping(0);
 	uint32_t lowPriority = NVIC_EncodePriority(0, 10, 0);
-	//DMA1_Channel3_IRQn
 	NVIC_SetPriority(IRQn, lowPriority);
 }
-
 
 
 void SystemClock_Config(void);
@@ -65,9 +63,18 @@ void MX_FREERTOS_Init(void);
 
 //////  USER OPTIONS  /////
 
-#define SHOW_HEARTBEATS 1
+#define SHOW_OTHER_HEARTBEATS 0
+#define SHOW_MY_HEARTBEATS 0
 
-char myUsername[21] = "Xx_L_xX";
+#define LOGON_USERNAME "long dong silver"
+#define LOGON_USER_ADDRESS 0xB0
+
+#define DEFAULT_TEXT_COLOR "\x1B[37m" //white text
+#define PRIVATE_TEXT_COLOR "\x1B[36m" //cyan text
+
+#define CARDIAC_ARREST 0
+
+
 
 
 
@@ -107,6 +114,8 @@ typedef struct{
 } User;
 
 User usersOnline[MAX_USERS];
+
+uint8_t currentUser = LOGON_USER_ADDRESS;
 
 const char* names[MAX_ADDRESS_INDEX + 1] = {
     [J_MANESH]    = "J_MANESH",
@@ -150,21 +159,21 @@ const char* names[MAX_ADDRESS_INDEX + 1] = {
 
 TickType_t startTime;
 
+uint8_t skinSuit;
+
+char myUsername[21] = LOGON_USERNAME;
+
 
 ///// FUNCTION DEFINIITIONS //////
 
 void myHAL_UART_printf(const char* format, ...);
 void myHAL_UART_clear();
 void SpiritGotoReadyState(void);
+void confirm_TX();
+void get_RX();
+#define CREATE_PAYLOAD_HEARTBEAT() createPayload(PAYLOAD_HEARTBEAT, myUsername, NULL, 0xFF); //todo
+void createPayload(int type, char* username, char* message, uint8_t dest);
 
-
-//const char* getName(int hex) {
-//    if (hex <= MAX_ADDRESS_INDEX && names[hex] != NULL) {
-//        return names[hex];
-//    } else {
-//        return NULL;  // Indicating the hex is not found
-//    }
-//}
 
 
 
@@ -181,6 +190,17 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
   SpiritIrqGetStatus(&xIrqStatus);
 
+  if (xIrqStatus.IRQ_RX_FIFO_ALMOST_FULL){
+	  //todo:
+	  //save part of the message
+	  //don't pass the flag on
+	  //increment the message pointer to it isn't overwritten
+
+  }
+
+  if (xIrqStatus.IRQ_TX_FIFO_ALMOST_EMPTY){
+	  //todo:
+  }
 
   if (xIrqStatus.IRQ_TX_DATA_SENT)
   {
@@ -219,12 +239,33 @@ int currentWriteTX;
 
 void confirm_TX(){
 
-	if(TXq[currentReadTX].type == 4){
-	    myHAL_UART_printf("message sent: %s \r\n", TXq[currentReadTX].message);
-	} else {
-	    myHAL_UART_printf("payload sent: type(%d) %s \r\n", TXq[currentReadTX].type, TXq[currentReadTX].user);
-	}
 
+	switch (TXq[currentReadTX].type){
+		case PACKET_HEARTBEAT:
+			if(SHOW_MY_HEARTBEATS){
+				myHAL_UART_printf("my heart still beats 4 u \r\n");
+			}
+			break;
+
+		case PACKET_MESSAGE:
+			myHAL_UART_printf("message sent: %s \r\n", TXq[currentReadTX].message);
+			break;
+
+		case PACKET_ANNOUNCEMENT:
+		    myHAL_UART_printf("going live!\r\n");
+			break;
+
+		case PACKET_ANNOUNCEMENT_RESP:
+		    myHAL_UART_printf("I see you %s! \r\n", names[TXq[currentReadTX].dest]);
+			break;
+
+		default:
+		    myHAL_UART_printf("umm... what the sigma? you sent a broken packet \r\n", TXq[currentReadTX].type, TXq[currentReadTX].user);
+			break;
+
+
+	}
+	// myHAL_UART_printf("payload sent: type(%d) %s \r\n", TXq[currentReadTX].type, TXq[currentReadTX].user);
 	currentReadTX = (++currentReadTX) %TX_Q_SIZE;
 }
 
@@ -239,6 +280,7 @@ void Task_TX(void *argument){
 
 
 		  if(TXq[currentReadTX].valid){
+			  if(skinSuit != 0){impersonate();}
 
 			  SpiritGotoReadyState(); //interrupt any other thang going down
 			  if(xSemaphoreTake(FLAG_SPIRIT, 10) == 1){
@@ -276,9 +318,11 @@ void Task_TX(void *argument){
 void printUsersOnline(){
 	TickType_t currentTime = xTaskGetTickCount();
 	myHAL_UART_printf("--- Users Online @t=%d:\r\n", (currentTime-startTime)/1000);
+	myHAL_UART_printf("- Logged in as 0x%x(%s)(%s)\r\n", currentUser, names[currentUser], myUsername);
+
 	for (int i = 0; i < MAX_USERS; i++){
 		if (usersOnline[i].address != 0){
-			myHAL_UART_printf("- 0x%x(%d)(%s) seen %d s ago\r\n", usersOnline[i].address, usersOnline[i].address, names[usersOnline[i].address], (currentTime - usersOnline[i].timeLastSeen)/1000);
+			myHAL_UART_printf("- 0x%x(%d)(%s)(%s) seen %d s ago\r\n", usersOnline[i].address, usersOnline[i].address, names[usersOnline[i].address], usersOnline[i].username, (currentTime - usersOnline[i].timeLastSeen)/1000);
 		}
 	}
 }
@@ -298,14 +342,6 @@ void reapUsers(){
 	}
 }
 
-void Task_printUsers(void *argument){
-	while (1){
-//	  reapUsers();
-//	  printUsersOnline();
-	  vTaskDelay(3500);
-	}
-}
-
 //RX//////////////
 // This should: determine type of recieved packet, add node to onlinelist, send ACKS, print if message
 
@@ -315,16 +351,15 @@ void get_RX(){
 	uint8_t sadd = SpiritPktStackGetReceivedSourceAddress();
 	uint8_t RXpayload[100];
 
-	//for all cases, update node info
-	usersOnline[sadd].timeLastSeen = xTaskGetTickCount();
-	usersOnline[sadd].address = sadd;
-
 
 	//get payload info and sanitize payloads
-	int rxLen = SPSGRF_GetRxData(&RXpayload);
+	int rxLen = SPSGRF_GetRxData((uint8_t *) &RXpayload);
 	RXpayload[rxLen+1] = '\0'; //ensure null termination for bad little nodes
-
-
+	bool private = false;
+	if (SpiritPktStackGetReceivedDestAddress() == SpiritPktStackGetBroadcastAddress()){
+		private = true;
+		HAL_UART_Transmit(&huart2, PRIVATE_TEXT_COLOR, 8, HAL_MAX_DELAY);//set text color
+	}
 	//if announcement, send ack
 	//if ack, do nothing
 	//if heartbeat, do nothing
@@ -333,6 +368,7 @@ void get_RX(){
 
 	if(RXpayload[0] == PACKET_ANNOUNCEMENT){
 		// send ack
+		myHAL_UART_printf("Announcement: (%s)0x%x has Joined\r\n", &RXpayload[1], sadd);
 		createPayload(PACKET_ANNOUNCEMENT_RESP, myUsername, NULL, sadd);
 
 	} else if (RXpayload[0] == PACKET_MESSAGE) {
@@ -340,12 +376,13 @@ void get_RX(){
 		char* i = (char*)RXpayload;
 		while(*i != '\0'){i++;}
 		i++;
-		myHAL_UART_printf("Message from 0x%x(%s): %s", sadd, names[sadd], i);
+
+		myHAL_UART_printf("Message from 0x%x(%s): %s\r\n", sadd, names[sadd], i);
 
 	} else if ((RXpayload[0] == PACKET_ANNOUNCEMENT_RESP) | (RXpayload[0] == PACKET_HEARTBEAT)){
 		//do nothing
 		if(RXpayload[0] == PACKET_HEARTBEAT){
-			myHAL_UART_printf("<3beat from 0x%x\r\n", sadd);
+			if (SHOW_OTHER_HEARTBEATS) {myHAL_UART_printf("<3beat from 0x%x\r\n", sadd);}
 		} else {
 			myHAL_UART_printf("ACK by 0x%x\r\n", sadd);
 		}
@@ -355,10 +392,18 @@ void get_RX(){
 		myHAL_UART_printf("Bad Packet(%02X:%02X:%02X:%02X) from 0x%x(%d)(%s)\r\n",
 				RXpayload[0], RXpayload[1], RXpayload[2], RXpayload[3],
 				sadd, sadd, names[sadd]);
+		return;
 	}
 
+	if(private){
+		HAL_UART_Transmit(&huart2, DEFAULT_TEXT_COLOR, 8, HAL_MAX_DELAY);//set color to white
+	}
 
-//	HAL_UART_Transmit(&huart2, "\r\n", 2, HAL_MAX_DELAY);
+	//for all cases, update node info
+	usersOnline[sadd].timeLastSeen = xTaskGetTickCount();
+	usersOnline[sadd].address = sadd;
+	strcpy(&usersOnline[sadd].username, &RXpayload[1]);
+
 
 }
 
@@ -377,7 +422,22 @@ void Task_RX(void *argument){
 void Task_BeatHeart(void *argument){
 	vTaskDelay(HEARTBEAT_TIME * 1000);
 	while(1){
-		createPayload(PACKET_HEARTBEAT, myUsername, NULL, 0xFF);
+		if(CARDIAC_ARREST){
+			char* massivemesssage = "jjjjjjjjjj"
+					"aaaaaaaaaa"
+					"ffffffffff"
+					"aaaaaaaaaa"
+					"gggggggggg"
+					"rrrrrrrrrr"
+					"tttttttttt"
+					"yuuuuuuuuu"
+					"iiiiiiiiii"
+					"!!!!!!!!!?";
+			createPayload(PACKET_MESSAGE, myUsername, massivemesssage, 0xFF);
+
+		} else {
+			createPayload(PACKET_HEARTBEAT, myUsername, NULL, 0xFF);
+		}
 		vTaskDelay(HEARTBEAT_TIME * 1000);
 	}
 }
@@ -409,7 +469,7 @@ int main(void)
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* Configure the system clock */
+  /* Configure the system cloc */
   SystemClock_Config();
 
 
@@ -448,6 +508,8 @@ int main(void)
 	NVIC->ISER[1] = (1 << (USART2_IRQn & 0x1F));		// enable USART2 ISR
 	__enable_irq();
 
+	HAL_UART_Transmit(&huart2, DEFAULT_TEXT_COLOR, 8, HAL_MAX_DELAY);//set color to white
+
 
   SPSGRF_Init();
 
@@ -455,7 +517,8 @@ int main(void)
 
 
 
-//  SpiritPktStackSetDestinationAddress(0xFF);
+//  impersonate(LOGON_USER_ADDRESS);
+//  strcpy(myUsername, LOGON_USERNAME);
 
 
   //Queue initial Announcement Packet, get start time, set semaphore
@@ -479,12 +542,7 @@ void USART2_IRQHandler(void){
 
 		r = USART2->RDR; // copy received char
 
-		if (r != 13){
-			//NOT enter
-			userInput[userInputPos++] = r;
-			HAL_UART_Transmit(&huart2, &r, 1, HAL_MAX_DELAY);
-
-		} else {
+		if (r == 13){
 			//enter
 			userInput[userInputPos] = '\0';
 			userInputPos = 0;
@@ -492,13 +550,28 @@ void USART2_IRQHandler(void){
 
 			handleCommand(userInput);
 
+
+		} else if (r == 127){
+			//backspace case
+			userInputPos--;
+			HAL_UART_Transmit(&huart2, &r, 1, HAL_MAX_DELAY);
+		}
+		else {
+			//NOT enter
+			userInput[userInputPos++] = r;
+			HAL_UART_Transmit(&huart2, &r, 1, HAL_MAX_DELAY);
+
 		}
 
 		USART2->ISR &= ~(USART_ISR_RXNE); // clear the flag
 	}
+	else {
+		USART2->ISR = 0; // clear the flag
+
+	}
 }
 
-void impersonate(uint8_t skin){
+void impersonate(){
 	//change username and address to a desired person's
 
 	SpiritGotoReadyState();
@@ -510,7 +583,7 @@ void impersonate(uint8_t skin){
 //	  s_assert_param(IS_SPIRIT_FUNCTIONAL_STATE(pxPktStackAddresses->xFilterOnMulticastAddress));
 //	  s_assert_param(IS_SPIRIT_FUNCTIONAL_STATE(pxPktStackAddresses->xFilterOnBroadcastAddress));
 //
-//	  /* Reads the filtering options ragister */
+//	  /* Reads the filtering options register */
 //	  g_xStatus = SpiritSpiReadRegisters(PCKT_FLT_OPTIONS_BASE, 1, &tempRegValue[0]);
 //
 //
@@ -520,10 +593,17 @@ void impersonate(uint8_t skin){
 	  /* Fills array with the addresses passed in the structure */
 	  tempRegValue[0] = BROADCAST_ADDRESS;
 	  tempRegValue[1] = MULTICAST_ADDRESS;
-	  tempRegValue[2] = skin;
+	  tempRegValue[2] = skinSuit;
 
 	  /* Writes them on the addresses registers */
 	  g_xStatus = SpiritSpiWriteRegisters(PCKT_FLT_GOALS_BROADCAST_BASE, 3, tempRegValue);
+
+
+
+	currentUser = skinSuit;
+	skinSuit = 0; //clear skinsuit flag, avoids unnecessary calling of the above functions
+
+	strcpy(&myUsername, names[currentUser]);
 
 }
 
@@ -537,23 +617,29 @@ void handleCommand(char* input){
 		switch (userInput[1]) {
 
 			case 'u': 	//list online users
-				printUsersOnline();
 				reapUsers();
+				printUsersOnline();
 				break;
 
 			case 'b':	//broadcast message
-				createPayload(PACKET_MESSAGE, myUsername, userInput, 0xFF);
+				createPayload(PACKET_MESSAGE, myUsername, &userInput[3], 0xFF);
 				break;
 
 			case 'p':	//private message
-				//TODO:get address from command and pass it here
-				createPayload(PACKET_MESSAGE, myUsername, userInput, 0xFF);
+		        char hex_str[3];
+		        hex_str[0] = userInput[2];
+		        hex_str[1] = userInput[3];
+		        hex_str[2] = '\0';
+
+		        uint8_t PInt = strtol(hex_str, NULL, 16);
+				createPayload(PACKET_MESSAGE, myUsername, &userInput[5], PInt);
 				break;
 
 			case 'i':	//impersonate
 				char hexStr[3];
 				hexStr[0] = userInput[2]; hexStr[1] = userInput[3]; hexStr[2] = '\0';
-				impersonate((uint8_t)strtol(hexStr, NULL, 16));
+				uint8_t hexInt = (uint8_t)strtol(hexStr, NULL, 16);
+				skinSuit = hexInt; //save the address to be impersonated until next transmission (cannot change address in IRQ)
 				break;
 
 			default: 	//Bad command
@@ -568,6 +654,21 @@ void handleCommand(char* input){
 
 }
 
+void split_string(const char *input_str, int *integer_value, char **message) {
+    if (input_str[0] == '/' && input_str[1] == 'p') {
+        char hex_str[3];
+        hex_str[0] = input_str[2];
+        hex_str[1] = input_str[3];
+        hex_str[2] = '\0';
+
+        *integer_value = strtol(hex_str, NULL, 16);
+
+        *message = strdup(input_str + 5);  // Skip "/pXX "
+    } else {
+        *integer_value = -1;
+        *message = NULL;
+    }
+}
 
 
 
