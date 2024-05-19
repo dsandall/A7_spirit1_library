@@ -1,7 +1,0 @@
-../Core/Src/queue.c:7:12:createNode	24	static
-../Core/Src/queue.c:19:6:initializeQueue	16	static
-../Core/Src/queue.c:25:6:isEmpty	16	static
-../Core/Src/queue.c:30:6:enqueue	24	static
-../Core/Src/queue.c:41:5:dequeue	24	static
-../Core/Src/queue.c:58:5:front	16	static
-../Core/Src/queue.c:67:5:rear	16	static

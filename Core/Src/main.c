@@ -29,6 +29,7 @@
 /* USER CODE BEGIN Includes */
 #include "SPIRIT_Config.h" // API code for the expansion board
 #include "spsgrf.h" //init code for the wireless module
+#include "semphr.h"                     // ARM.FreeRTOS::RTOS:Core
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,22 +37,10 @@
 #include <stdbool.h>
 
 
-
-#include "semphr.h"                     // ARM.FreeRTOS::RTOS:Core
-
-
-#define PACKET_ANNOUNCEMENT 1
-#define PACKET_ANNOUNCEMENT_RESP 2
-#define PACKET_HEARTBEAT 3
-#define PACKET_MESSAGE 4
-
-
 /* FREERTOS Tasks, Semaphores, and Variables  ------------------------------------*/
 void Task_TX(void *argument);
 void Task_printUsers(void *argument);
 void Task_RX(void *argument);
-
-
 
 TaskHandle_t Task_TXHandler, Task_printUsersHandler, Task_RXHandler, Task_HBHandler;
 SemaphoreHandle_t FLAG_SPIRIT;
@@ -64,52 +53,62 @@ void RTOS_ISR_setPriority(uint32_t IRQn){
 }
 
 
-typedef struct User{
-	char username[20];
+
+void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
+
+
+
+
+
+
+
+//////  USER OPTIONS  /////
+
+#define SHOW_HEARTBEATS 1
+
+char myUsername[21] = "Xx_L_xX";
+
+
+
+
+//////  NETWORK STANDARD DEFINES  /////
+
+#define PACKET_ANNOUNCEMENT 1
+#define PACKET_ANNOUNCEMENT_RESP 2
+#define PACKET_HEARTBEAT 3
+#define PACKET_MESSAGE 4
+
+#define MAX_USERS 256
+
+#define MAX_ADDRESS_INDEX 0xC9
+
+#define USER_DEAD_TIME 110
+
+#define HEARTBEAT_TIME 5
+
+
+
+//////  STRUCTS AND GLOBALS  /////
+
+
+typedef struct {
+	bool valid;
+	uint8_t type;
+	char* user;
+	char* message;
+	uint8_t dest;
+}Payload;
+
+typedef struct{
+	char username[21]; //including null character
 	unsigned int address;
 	long timeLastSeen;
 } User;
 
-char myUsername[32] = "Xx_L_xX";
-TickType_t startTime;
+User usersOnline[MAX_USERS];
 
-struct User usersOnline[256];
-
-/* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
-
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
-void MX_FREERTOS_Init(void);
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-#define MAX_INDEX 0xC9
-
-const char* names[MAX_INDEX + 1] = {
+const char* names[MAX_ADDRESS_INDEX + 1] = {
     [J_MANESH]    = "J_MANESH",
     [N_MASTEN]    = "N_MASTEN",
     [M_PROVINCE]  = "M_PROVINCE",
@@ -147,67 +146,28 @@ const char* names[MAX_INDEX + 1] = {
 	[DEEZ_NUTZ]   = "DEEZ_NUTZ"
 };
 
-typedef struct {
-	bool valid;
-	uint8_t type;
-	char* user;
-	char* message;
-	uint8_t dest;
-}Payload;
+
+
+TickType_t startTime;
+
+
+///// FUNCTION DEFINIITIONS //////
+
+void myHAL_UART_printf(const char* format, ...);
+void myHAL_UART_clear();
+void SpiritGotoReadyState(void);
+
 
 //const char* getName(int hex) {
-//    if (hex <= MAX_INDEX && names[hex] != NULL) {
+//    if (hex <= MAX_ADDRESS_INDEX && names[hex] != NULL) {
 //        return names[hex];
 //    } else {
 //        return NULL;  // Indicating the hex is not found
 //    }
 //}
 
-void myHAL_UART_printf(const char* format, ...) {
-	va_list args;
-	va_start(args, format);
 
-	// Allocate temporary buffer for formatted string
-	static char buffer[1024]; // Adjust buffer size as needed
-	int formatted_length = vsnprintf(buffer, sizeof(buffer), format, args);
 
-	// Check for potential buffer overflow (optional)
-	if (formatted_length >= sizeof(buffer)) {
-		// Handle buffer overflow (e.g., print error message)
-		while(1);
-	} else {
-		// Print the formatted string
-		HAL_UART_Transmit(&huart2, buffer, formatted_length, HAL_MAX_DELAY);
-	}
-
-	va_end(args);
-}
-
-void myHAL_UART_clear(){
-	char clear[] = "\x1B[2J\x1B[0m\x1B[H"; // clear
-	HAL_UART_Transmit(&huart2, clear, strlen(clear), 100);
-
-}
-
-void SpiritGotoReadyState(void) {
-  static unsigned int i;
-  /* Wait for the radio to enter the ready state */
-  do {
-    /* Go to the ready state */
-    if (g_xStatus.MC_STATE == MC_STATE_LOCK) {
-      SpiritCmdStrobeReady();
-    } else {
-      SpiritCmdStrobeSabort();
-    }
-    /* Delay for state transition */
-    for (i = 0; i != 0xFF; i++)
-      ;
-    /* Update the global status register variable */
-    SpiritRefreshStatus();
-  } while (g_xStatus.MC_STATE != MC_STATE_READY);
-
-  xSemaphoreGive(FLAG_SPIRIT);
-}
 
 
 
@@ -288,13 +248,16 @@ void Task_TX(void *argument){
 
 				uint8_t type = TXq[currentReadTX].type;
 				uint16_t len = 1+strlen(myUsername)+1;
+
 				loadString[0] = type;
 				strcpy(&loadString[1], myUsername);
 				if (type == 4){
 					strcpy(&loadString[strlen(myUsername)+1+1], TXq[currentReadTX].message);
 					len = 1+ strlen(myUsername)+1+1+strlen(TXq[currentReadTX].message);
 				}
+
 				TXq[currentReadTX].valid = 0;
+
 				SPSGRF_StartTx(loadString, len);
 			  }
 		//			  vTaskDelay(1000);
@@ -307,23 +270,23 @@ void Task_TX(void *argument){
 }
 
 
+
 //USERS//////////////
 
 void printUsersOnline(){
 	TickType_t currentTime = xTaskGetTickCount();
 	myHAL_UART_printf("--- Users Online @t=%d:\r\n", (currentTime-startTime)/1000);
-	for (int i = 0; i < 256; i++){
+	for (int i = 0; i < MAX_USERS; i++){
 		if (usersOnline[i].address != 0){
 			myHAL_UART_printf("- 0x%x(%d)(%s) seen %d s ago\r\n", usersOnline[i].address, usersOnline[i].address, names[usersOnline[i].address], (currentTime - usersOnline[i].timeLastSeen)/1000);
 		}
 	}
 }
 
-#define USER_DEAD_TIME 110
 
 void reapUsers(){
 	TickType_t currentTime = xTaskGetTickCount();
-	for (int i = 0; i < 256; i++){
+	for (int i = 0; i < MAX_USERS; i++){
 		if ((usersOnline[i].address != 0)){
 			if((currentTime-usersOnline[i].timeLastSeen)/1000 > USER_DEAD_TIME){
 				myHAL_UART_printf("reaping user 0x%x\r\n", usersOnline[i].address);
@@ -412,10 +375,10 @@ void Task_RX(void *argument){
 
 
 void Task_BeatHeart(void *argument){
-	vTaskDelay(5000);
+	vTaskDelay(HEARTBEAT_TIME * 1000);
 	while(1){
 		createPayload(PACKET_HEARTBEAT, myUsername, NULL, 0xFF);
-		vTaskDelay(5000);
+		vTaskDelay(HEARTBEAT_TIME * 1000);
 	}
 }
 
@@ -442,24 +405,12 @@ void createPayload(int type, char* username, char* message, uint8_t dest){
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
   /* Configure the system clock */
   SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
 
 
   RTOS_ISR_setPriority(EXTI9_5_IRQn);
@@ -470,10 +421,6 @@ int main(void)
   		NULL, tskIDLE_PRIORITY + 4, &Task_TXHandler);
   if (retVal != 1) { while(1);}	// check if task creation failed
 
-//  retVal = xTaskCreate(Task_printUsers, "Task_printUsers", configMINIMAL_STACK_SIZE,
-//  		NULL, tskIDLE_PRIORITY + 2, &Task_printUsersHandler);
-//  if (retVal != 1) { while(1);}	// check if task creation failed
-
   retVal = xTaskCreate(Task_RX, "Task_RX", configMINIMAL_STACK_SIZE,
   		NULL, tskIDLE_PRIORITY + 3, &Task_RXHandler);
   if (retVal != 1) { while(1);}	// check if task creation failed
@@ -483,18 +430,11 @@ int main(void)
   if (retVal != 1) { while(1);}	// check if task creation failed
 
 
-  // Create Semaphores for task2 and task3
+  // Create Binary Semaphore
   FLAG_SPIRIT = xSemaphoreCreateBinary();
   if (FLAG_SPIRIT == NULL) { while(1); }
 
 
-
-//  //Initialization transmissisons
-
-  createPayload(PACKET_ANNOUNCEMENT, myUsername, NULL, 0xFF);
-
-
-  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
@@ -508,21 +448,25 @@ int main(void)
 	NVIC->ISER[1] = (1 << (USART2_IRQn & 0x1F));		// enable USART2 ISR
 	__enable_irq();
 
-  /* USER CODE BEGIN 2 */
-  startTime = xTaskGetTickCount();
-
-  myHAL_UART_clear();
-  myHAL_UART_printf("let's goooo \r\n");
 
   SPSGRF_Init();
 
-  SpiritPktStackSetDestinationAddress(0xFF);
 
+
+
+
+//  SpiritPktStackSetDestinationAddress(0xFF);
+
+
+  //Queue initial Announcement Packet, get start time, set semaphore
+  createPayload(PACKET_ANNOUNCEMENT, myUsername, NULL, 0xFF);
+  startTime = xTaskGetTickCount();
   xSemaphoreGive(FLAG_SPIRIT);
 
-  vTaskStartScheduler();
+  myHAL_UART_clear();
+  myHAL_UART_printf("RTOS NET ONLINE\r\n");
 
-  /* USER CODE END 2 */
+  vTaskStartScheduler();
 }
 
 
@@ -637,6 +581,52 @@ void handleCommand(char* input){
 
 
 
+
+void myHAL_UART_printf(const char* format, ...) {
+	va_list args;
+	va_start(args, format);
+
+	// Allocate temporary buffer for formatted string
+	static char buffer[1024]; // Adjust buffer size as needed
+	int formatted_length = vsnprintf(buffer, sizeof(buffer), format, args);
+
+	// Check for potential buffer overflow (optional)
+	if (formatted_length >= sizeof(buffer)) {
+		// Handle buffer overflow (e.g., print error message)
+		while(1);
+	} else {
+		// Print the formatted string
+		HAL_UART_Transmit(&huart2, buffer, formatted_length, HAL_MAX_DELAY);
+	}
+
+	va_end(args);
+}
+
+void myHAL_UART_clear(){
+	char clear[] = "\x1B[2J\x1B[0m\x1B[H"; // clear
+	HAL_UART_Transmit(&huart2, clear, strlen(clear), 100);
+
+}
+
+void SpiritGotoReadyState(void) {
+  static unsigned int i;
+  /* Wait for the radio to enter the ready state */
+  do {
+    /* Go to the ready state */
+    if (g_xStatus.MC_STATE == MC_STATE_LOCK) {
+      SpiritCmdStrobeReady();
+    } else {
+      SpiritCmdStrobeSabort();
+    }
+    /* Delay for state transition */
+    for (i = 0; i != 0xFF; i++)
+      ;
+    /* Update the global status register variable */
+    SpiritRefreshStatus();
+  } while (g_xStatus.MC_STATE != MC_STATE_READY);
+
+  xSemaphoreGive(FLAG_SPIRIT);
+}
 
 
 
