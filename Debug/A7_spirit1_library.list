@@ -7,23 +7,23 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
   1 .text         0000b72c  08000190  08000190  00010190  2**4
                   CONTENTS, ALLOC, LOAD, READONLY, CODE
-  2 .rodata       00000454  0800b8bc  0800b8bc  0001b8bc  2**2
+  2 .rodata       00000460  0800b8bc  0800b8bc  0001b8bc  2**2
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
-  3 .ARM.extab    00000000  0800bd10  0800bd10  0002039c  2**0
+  3 .ARM.extab    00000000  0800bd1c  0800bd1c  0002039c  2**0
                   CONTENTS
-  4 .ARM          00000008  0800bd10  0800bd10  0001bd10  2**2
+  4 .ARM          00000008  0800bd1c  0800bd1c  0001bd1c  2**2
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
-  5 .preinit_array 00000000  0800bd18  0800bd18  0002039c  2**0
+  5 .preinit_array 00000000  0800bd24  0800bd24  0002039c  2**0
                   CONTENTS, ALLOC, LOAD, DATA
-  6 .init_array   00000004  0800bd18  0800bd18  0001bd18  2**2
+  6 .init_array   00000004  0800bd24  0800bd24  0001bd24  2**2
                   CONTENTS, ALLOC, LOAD, DATA
-  7 .fini_array   00000004  0800bd1c  0800bd1c  0001bd1c  2**2
+  7 .fini_array   00000004  0800bd28  0800bd28  0001bd28  2**2
                   CONTENTS, ALLOC, LOAD, DATA
-  8 .data         0000039c  20000000  0800bd20  00020000  2**2
+  8 .data         0000039c  20000000  0800bd2c  00020000  2**2
                   CONTENTS, ALLOC, LOAD, DATA
-  9 .bss          00003c74  2000039c  0800c0bc  0002039c  2**2
+  9 .bss          00003c74  2000039c  0800c0c8  0002039c  2**2
                   ALLOC
- 10 ._user_heap_stack 00000600  20004010  0800c0bc  00024010  2**0
+ 10 ._user_heap_stack 00000600  20004010  0800c0c8  00024010  2**0
                   ALLOC
  11 .ARM.attributes 00000030  00000000  00000000  0002039c  2**0
                   CONTENTS, READONLY
@@ -37,15 +37,15 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  16 .debug_rnglists 00001ac7  00000000  00000000  0004e5f0  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_macro  0002d750  00000000  00000000  000500b7  2**0
+ 17 .debug_macro  0002d756  00000000  00000000  000500b7  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 18 .debug_line   0002765f  00000000  00000000  0007d807  2**0
+ 18 .debug_line   0002765f  00000000  00000000  0007d80d  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .debug_str    0010f89c  00000000  00000000  000a4e66  2**0
+ 19 .debug_str    0010f8ab  00000000  00000000  000a4e6c  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 20 .debug_frame  00009718  00000000  00000000  001b4704  2**2
+ 20 .debug_frame  00009718  00000000  00000000  001b4718  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .debug_line_str 00000076  00000000  00000000  001bde1c  2**0
+ 21 .debug_line_str 00000076  00000000  00000000  001bde30  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -1505,7 +1505,7 @@ void myHAL_UART_clear(){
  8000ff6:	46bd      	mov	sp, r7
  8000ff8:	bd80      	pop	{r7, pc}
  8000ffa:	bf00      	nop
- 8000ffc:	0800ba38 	.word	0x0800ba38
+ 8000ffc:	0800ba44 	.word	0x0800ba44
  8001000:	20002484 	.word	0x20002484
 
 08001004 <SpiritGotoReadyState>:
@@ -1682,8 +1682,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
  8001114:	bd80      	pop	{r7, pc}
  8001116:	bf00      	nop
  8001118:	200003c4 	.word	0x200003c4
- 800111c:	0800ba44 	.word	0x0800ba44
- 8001120:	0800ba54 	.word	0x0800ba54
+ 800111c:	0800ba50 	.word	0x0800ba50
+ 8001120:	0800ba60 	.word	0x0800ba60
  8001124:	e000ed04 	.word	0xe000ed04
 
 08001128 <confirm_TX>:
@@ -1695,7 +1695,7 @@ char TXpayload[] = "3kwikskoped";
 void confirm_TX(){
  8001128:	b580      	push	{r7, lr}
  800112a:	af00      	add	r7, sp, #0
-    myHAL_UART_printf("payload sent: %s", TXpayload);
+    myHAL_UART_printf("payload sent: %s\r\n", TXpayload);
  800112c:	4902      	ldr	r1, [pc, #8]	; (8001138 <confirm_TX+0x10>)
  800112e:	4803      	ldr	r0, [pc, #12]	; (800113c <confirm_TX+0x14>)
  8001130:	f7ff ff24 	bl	8000f7c <myHAL_UART_printf>
@@ -1703,7 +1703,7 @@ void confirm_TX(){
  8001134:	bf00      	nop
  8001136:	bd80      	pop	{r7, pc}
  8001138:	20000328 	.word	0x20000328
- 800113c:	0800ba60 	.word	0x0800ba60
+ 800113c:	0800ba6c 	.word	0x0800ba6c
 
 08001140 <Task_TX>:
 
@@ -1858,10 +1858,10 @@ void printUsersOnline(){
  8001246:	bf00      	nop
  8001248:	200003c8 	.word	0x200003c8
  800124c:	10624dd3 	.word	0x10624dd3
- 8001250:	0800ba74 	.word	0x0800ba74
+ 8001250:	0800ba80 	.word	0x0800ba80
  8001254:	200003cc 	.word	0x200003cc
  8001258:	20000000 	.word	0x20000000
- 800125c:	0800ba90 	.word	0x0800ba90
+ 800125c:	0800ba9c 	.word	0x0800ba9c
 
 08001260 <reapUsers>:
 
@@ -1961,7 +1961,7 @@ void reapUsers(){
  80012fe:	bf00      	nop
  8001300:	200003cc 	.word	0x200003cc
  8001304:	0001b197 	.word	0x0001b197
- 8001308:	0800bab0 	.word	0x0800bab0
+ 8001308:	0800babc 	.word	0x0800babc
 
 0800130c <Task_printUsers>:
 
@@ -2091,10 +2091,10 @@ void get_RX(){
  80013e0:	46bd      	mov	sp, r7
  80013e2:	bd90      	pop	{r4, r7, pc}
  80013e4:	200003cc 	.word	0x200003cc
- 80013e8:	0800bac4 	.word	0x0800bac4
+ 80013e8:	0800bad0 	.word	0x0800bad0
  80013ec:	20002484 	.word	0x20002484
- 80013f0:	0800bad0 	.word	0x0800bad0
- 80013f4:	0800baf0 	.word	0x0800baf0
+ 80013f0:	0800badc 	.word	0x0800badc
+ 80013f4:	0800bafc 	.word	0x0800bafc
 
 080013f8 <Task_RX>:
 	//byte 0 - heart beat
@@ -2281,17 +2281,17 @@ int main(void)
  80014e8:	bd80      	pop	{r7, pc}
  80014ea:	bf00      	nop
  80014ec:	200003b8 	.word	0x200003b8
- 80014f0:	0800baf4 	.word	0x0800baf4
+ 80014f0:	0800bb00 	.word	0x0800bb00
  80014f4:	08001141 	.word	0x08001141
  80014f8:	200003bc 	.word	0x200003bc
- 80014fc:	0800bafc 	.word	0x0800bafc
+ 80014fc:	0800bb08 	.word	0x0800bb08
  8001500:	0800130d 	.word	0x0800130d
  8001504:	200003c0 	.word	0x200003c0
- 8001508:	0800bb0c 	.word	0x0800bb0c
+ 8001508:	0800bb18 	.word	0x0800bb18
  800150c:	080013f9 	.word	0x080013f9
  8001510:	200003c4 	.word	0x200003c4
  8001514:	200003c8 	.word	0x200003c8
- 8001518:	0800bb14 	.word	0x0800bb14
+ 8001518:	0800bb20 	.word	0x0800bb20
 
 0800151c <SystemClock_Config>:
 /**
@@ -3791,7 +3791,7 @@ LoopForever:
   ldr r1, =_edata
  8001c8c:	2000039c 	.word	0x2000039c
   ldr r2, =_sidata
- 8001c90:	0800bd20 	.word	0x0800bd20
+ 8001c90:	0800bd2c 	.word	0x0800bd2c
   ldr r2, =_sbss
  8001c94:	2000039c 	.word	0x2000039c
   ldr r4, =_ebss
@@ -4844,8 +4844,8 @@ void SpiritManagementSetFrequencyBase(uint32_t lFBase)
  80022c0:	1339e9c3 	.word	0x1339e9c3
  80022c4:	19a28d05 	.word	0x19a28d05
  80022c8:	33451a0a 	.word	0x33451a0a
- 80022cc:	0800bb84 	.word	0x0800bb84
- 80022d0:	0800bb80 	.word	0x0800bb80
+ 80022cc:	0800bb90 	.word	0x0800bb90
+ 80022d0:	0800bb8c 	.word	0x0800bb8c
  80022d4:	20002514 	.word	0x20002514
 
 080022d8 <SpiritManagementWaVcoCalibration>:
@@ -7015,7 +7015,7 @@ uint8_t SpiritRadioSearchWCP(uint32_t lFc)
  8003068:	08e18f3f 	.word	0x08e18f3f
  800306c:	0a6fd060 	.word	0x0a6fd060
  8003070:	10624dd3 	.word	0x10624dd3
- 8003074:	0800bc44 	.word	0x0800bc44
+ 8003074:	0800bc50 	.word	0x0800bc50
 
 08003078 <SpiritRadioGetSynthWord>:
 * @brief  Returns the synth word.
@@ -7646,9 +7646,9 @@ uint8_t SpiritRadioSetFrequencyBase(uint32_t lFBase)
  8003434:	1339e9c3 	.word	0x1339e9c3
  8003438:	19a28d05 	.word	0x19a28d05
  800343c:	33451a0a 	.word	0x33451a0a
- 8003440:	0800bb88 	.word	0x0800bb88
+ 8003440:	0800bb94 	.word	0x0800bb94
  8003444:	20002510 	.word	0x20002510
- 8003448:	0800bb8c 	.word	0x0800bb8c
+ 8003448:	0800bb98 	.word	0x0800bb98
  800344c:	20002514 	.word	0x20002514
  8003450:	20000339 	.word	0x20000339
 
@@ -7729,7 +7729,7 @@ uint32_t SpiritRadioGetFrequencyBase(void)
  80034de:	46bd      	mov	sp, r7
  80034e0:	e8bd 83b0 	ldmia.w	sp!, {r4, r5, r7, r8, r9, pc}
  80034e4:	20002510 	.word	0x20002510
- 80034e8:	0800bb88 	.word	0x0800bb88
+ 80034e8:	0800bb94 	.word	0x0800bb94
 
 080034ec <SpiritRadioSearchDatarateME>:
 * @param  pcM pointer to the returned mantissa value.
@@ -8179,7 +8179,7 @@ void SpiritRadioSearchChannelBwME(uint32_t lBandwidth, uint8_t* pcM, uint8_t* pc
  8003806:	bf00      	nop
  8003808:	20002510 	.word	0x20002510
  800380c:	51eb851f 	.word	0x51eb851f
- 8003810:	0800bb90 	.word	0x0800bb90
+ 8003810:	0800bb9c 	.word	0x0800bb9c
  8003814:	c9a633fd 	.word	0xc9a633fd
  8003818:	38e38e39 	.word	0x38e38e39
 
@@ -8609,7 +8609,7 @@ uint8_t SpiritRadioGetdBm2Reg(uint32_t lFBase, float fPowerdBm)
  8003b8c:	14ced7e0 	.word	0x14ced7e0
  8003b90:	08e18f3f 	.word	0x08e18f3f
  8003b94:	0a6fd060 	.word	0x0a6fd060
- 8003b98:	0800bc64 	.word	0x0800bc64
+ 8003b98:	0800bc70 	.word	0x0800bc70
  8003b9c:	42200000 	.word	0x42200000
  8003ba0:	42b40000 	.word	0x42b40000
  8003ba4:	42b40000 	.word	0x42b40000
@@ -11389,7 +11389,7 @@ HAL_StatusTypeDef HAL_RCC_OscConfig(RCC_OscInitTypeDef  *RCC_OscInitStruct)
  8004c34:	e014      	b.n	8004c60 <HAL_RCC_OscConfig+0x298>
  8004c36:	bf00      	nop
  8004c38:	40021000 	.word	0x40021000
- 8004c3c:	0800bb38 	.word	0x0800bb38
+ 8004c3c:	0800bb44 	.word	0x0800bb44
  8004c40:	20000334 	.word	0x20000334
  8004c44:	20000340 	.word	0x20000340
  8004c48:	4ba0      	ldr	r3, [pc, #640]	; (8004ecc <HAL_RCC_OscConfig+0x504>)
@@ -12694,7 +12694,7 @@ HAL_StatusTypeDef HAL_RCC_ClockConfig(RCC_ClkInitTypeDef  *RCC_ClkInitStruct, ui
  800536a:	bd80      	pop	{r7, pc}
  800536c:	40022000 	.word	0x40022000
  8005370:	40021000 	.word	0x40021000
- 8005374:	0800bb38 	.word	0x0800bb38
+ 8005374:	0800bb44 	.word	0x0800bb44
  8005378:	20000334 	.word	0x20000334
  800537c:	20000340 	.word	0x20000340
 
@@ -12899,7 +12899,7 @@ uint32_t HAL_RCC_GetSysClockFreq(void)
  8005484:	4770      	bx	lr
  8005486:	bf00      	nop
  8005488:	40021000 	.word	0x40021000
- 800548c:	0800bb50 	.word	0x0800bb50
+ 800548c:	0800bb5c 	.word	0x0800bb5c
  8005490:	00f42400 	.word	0x00f42400
  8005494:	007a1200 	.word	0x007a1200
 
@@ -12948,7 +12948,7 @@ uint32_t HAL_RCC_GetPCLK1Freq(void)
  80054d0:	4618      	mov	r0, r3
  80054d2:	bd80      	pop	{r7, pc}
  80054d4:	40021000 	.word	0x40021000
- 80054d8:	0800bb48 	.word	0x0800bb48
+ 80054d8:	0800bb54 	.word	0x0800bb54
 
 080054dc <HAL_RCC_GetPCLK2Freq>:
   * @note   Each time PCLK2 changes, this function must be called to update the
@@ -12975,7 +12975,7 @@ uint32_t HAL_RCC_GetPCLK2Freq(void)
  80054fc:	4618      	mov	r0, r3
  80054fe:	bd80      	pop	{r7, pc}
  8005500:	40021000 	.word	0x40021000
- 8005504:	0800bb48 	.word	0x0800bb48
+ 8005504:	0800bb54 	.word	0x0800bb54
 
 08005508 <HAL_RCC_GetClockConfig>:
   *         will be configured.
@@ -24294,7 +24294,7 @@ BaseType_t xReturn;
  80092ee:	46bd      	mov	sp, r7
  80092f0:	bd80      	pop	{r7, pc}
  80092f2:	bf00      	nop
- 80092f4:	0800bb20 	.word	0x0800bb20
+ 80092f4:	0800bb2c 	.word	0x0800bb2c
  80092f8:	08009971 	.word	0x08009971
  80092fc:	200031ac 	.word	0x200031ac
  8009300:	20002cb4 	.word	0x20002cb4
@@ -26625,7 +26625,7 @@ BaseType_t xReturn = pdFAIL;
  8009f5c:	46bd      	mov	sp, r7
  8009f5e:	bd80      	pop	{r7, pc}
  8009f60:	200031ec 	.word	0x200031ec
- 8009f64:	0800bb28 	.word	0x0800bb28
+ 8009f64:	0800bb34 	.word	0x0800bb34
  8009f68:	0800a0a5 	.word	0x0800a0a5
  8009f6c:	200031f0 	.word	0x200031f0
 
@@ -27725,7 +27725,7 @@ static void prvCheckForValidListAndQueue( void )
  800a56c:	200031e8 	.word	0x200031e8
  800a570:	20003298 	.word	0x20003298
  800a574:	200031f8 	.word	0x200031f8
- 800a578:	0800bb30 	.word	0x0800bb30
+ 800a578:	0800bb3c 	.word	0x0800bb3c
 
 0800a57c <pxPortInitialiseStack>:
 
@@ -29572,10 +29572,10 @@ uint8_t *puc;
  800b0d2:	4798      	blx	r3
  800b0d4:	3601      	adds	r6, #1
  800b0d6:	e7f2      	b.n	800b0be <__libc_init_array+0x1e>
- 800b0d8:	0800bd18 	.word	0x0800bd18
- 800b0dc:	0800bd18 	.word	0x0800bd18
- 800b0e0:	0800bd18 	.word	0x0800bd18
- 800b0e4:	0800bd1c 	.word	0x0800bd1c
+ 800b0d8:	0800bd24 	.word	0x0800bd24
+ 800b0dc:	0800bd24 	.word	0x0800bd24
+ 800b0e0:	0800bd24 	.word	0x0800bd24
+ 800b0e4:	0800bd28 	.word	0x0800bd28
 
 0800b0e8 <__retarget_lock_acquire_recursive>:
  800b0e8:	4770      	bx	lr
@@ -29944,11 +29944,11 @@ uint8_t *puc;
  800b434:	4638      	mov	r0, r7
  800b436:	f000 f879 	bl	800b52c <_printf_i>
  800b43a:	e7eb      	b.n	800b414 <_svfiprintf_r+0x1c0>
- 800b43c:	0800bcdc 	.word	0x0800bcdc
- 800b440:	0800bce6 	.word	0x0800bce6
+ 800b43c:	0800bce8 	.word	0x0800bce8
+ 800b440:	0800bcf2 	.word	0x0800bcf2
  800b444:	00000000 	.word	0x00000000
  800b448:	0800b1a1 	.word	0x0800b1a1
- 800b44c:	0800bce2 	.word	0x0800bce2
+ 800b44c:	0800bcee 	.word	0x0800bcee
 
 0800b450 <_printf_common>:
  800b450:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
@@ -30281,8 +30281,8 @@ uint8_t *puc;
  800b760:	f104 0619 	add.w	r6, r4, #25
  800b764:	e7f5      	b.n	800b752 <_printf_i+0x226>
  800b766:	bf00      	nop
- 800b768:	0800bced 	.word	0x0800bced
- 800b76c:	0800bcfe 	.word	0x0800bcfe
+ 800b768:	0800bcf9 	.word	0x0800bcf9
+ 800b76c:	0800bd0a 	.word	0x0800bd0a
 
 0800b770 <memmove>:
  800b770:	4288      	cmp	r0, r1

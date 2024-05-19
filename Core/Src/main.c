@@ -142,7 +142,8 @@ const char* names[MAX_INDEX + 1] = {
     [C_BAE]       = "C_BAE",
     [D_ROBERDS]   = "D_ROBERDS",
     [P_MULPURU]   = "P_MULPURU",
-    [T_GREEN]     = "T_GREEN"
+    [T_GREEN]     = "T_GREEN",
+	[DEEZ_NUTZ]   = "DEEZ_NUTZ"
 };
 
 const char* getName(int hex) {

@@ -32,6 +32,7 @@
 #define	S_SELTZER	0x60
 #define	J_SHAFFER	0x3F
 #define	M_WONG		0xA0
+#define DEEZ_NUTZ 	0x69
 
 #include <stdio.h>
 
