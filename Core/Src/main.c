@@ -52,7 +52,7 @@ void Task_RX(void *argument);
 
 
 
-TaskHandle_t Task_TXHandler, Task_printUsersHandler, Task_RXHandler;
+TaskHandle_t Task_TXHandler, Task_printUsersHandler, Task_RXHandler, Task_HBHandler;
 SemaphoreHandle_t FLAG_SPIRIT;
 
 void RTOS_ISR_setPriority(uint32_t IRQn){
@@ -69,7 +69,7 @@ typedef struct User{
 	long timeLastSeen;
 } User;
 
-
+char myUsername[32] = "Xx_L_xX";
 TickType_t startTime;
 
 struct User usersOnline[256];
@@ -249,18 +249,44 @@ void confirm_TX(){
 }
 
 
+typedef struct {
+	int valid;
+	int type;
+	char* user;
+	char* message;
+}Payload;
+
+Payload TXq[66];
+int currentReadTX;
+int currentWriteTX;
 void Task_TX(void *argument){
+	char loadString[100]; //NOT a string
 	  while (1)
 	  {
 
-		  SpiritGotoReadyState();
 
-		  if(xSemaphoreTake(FLAG_SPIRIT, 10) == 1){
-			TXpayload[0] = PACKET_HEARTBEAT; //set heartbeat type
-			SPSGRF_StartTx(TXpayload, strlen(TXpayload));
+		  if(TXq[currentReadTX].valid){
+
+			  SpiritGotoReadyState(); //interrupt any other thang going down
+			  if(xSemaphoreTake(FLAG_SPIRIT, 10) == 1){
+//				TXpayload[0] = PACKET_HEARTBEAT; //set heartbeat type
+
+				int type = TXq[currentReadTX].type;
+				int len = 1+strlen(myUsername)+1;
+				loadString[0] = type;
+				strcpy(&loadString[1], myUsername);
+				if (type == 4){
+					strcpy(&loadString[strlen(myUsername)+1], TXq[currentReadTX].message);
+					len = 1+ strlen(myUsername)+1+strlen(TXq[currentReadTX].message);
+				}
+
+				currentReadTX++;
+				SPSGRF_StartTx(loadString, len);
+			  }
+			  vTaskDelay(1000);
+
 		  }
-
-		  vTaskDelay(20000);
+		  vTaskDelay(50);
 
 	  }
 }
@@ -343,6 +369,16 @@ void Task_RX(void *argument){
 /* USER CODE END 0 */
 
 
+void Task_BeatHeart(void *argument){
+	while(1){
+		currentWriteTX++;
+		TXq[currentWriteTX].type = PACKET_HEARTBEAT;
+		TXq[currentWriteTX].user = myUsername;
+		TXq[currentWriteTX].valid = 1;
+		vTaskDelay(5000);
+	}
+}
+
 
 /**
   * @brief  The application entry point.
@@ -386,6 +422,10 @@ int main(void)
   		NULL, tskIDLE_PRIORITY + 3, &Task_RXHandler);
   if (retVal != 1) { while(1);}	// check if task creation failed
 
+  retVal = xTaskCreate(Task_BeatHeart, "Task_BeatHeart", configMINIMAL_STACK_SIZE,
+  		NULL, tskIDLE_PRIORITY + 3, &Task_HBHandler);
+  if (retVal != 1) { while(1);}	// check if task creation failed
+
 
   // Create Semaphores for task2 and task3
   FLAG_SPIRIT = xSemaphoreCreateBinary();
@@ -393,6 +433,10 @@ int main(void)
 
 
 
+  //Initialization transmissisons
+  TXq[0].type = PACKET_HEARTBEAT;
+  TXq[0].user = myUsername;
+  TXq[0].valid = 1;
 
 
   /* USER CODE END SysInit */
@@ -402,6 +446,12 @@ int main(void)
   MX_SPI1_Init();
   MX_USART2_UART_Init();
 
+	//	enable interrupts for USART2 receive
+	USART2->CR1 |= USART_CR1_RXNEIE;					// enable RXNE interrupt on USART2
+	USART2->ISR &= ~(USART_ISR_RXNE);					// clear interrupt flagwhile (message[i] != 0)
+
+	NVIC->ISER[1] = (1 << (USART2_IRQn & 0x1F));		// enable USART2 ISR
+	__enable_irq();
 
   /* USER CODE BEGIN 2 */
   startTime = xTaskGetTickCount();
@@ -419,6 +469,76 @@ int main(void)
 
   /* USER CODE END 2 */
 }
+
+
+char userInput[100];
+int userInputPos = 0;
+void USART2_IRQHandler(void){
+	char r;
+
+	if (USART2->ISR & USART_ISR_RXNE){
+
+		r = USART2->RDR; // copy received char
+
+		if (r != 13){
+			//NOT enter
+			userInput[userInputPos++] = r;
+
+		} else {
+			//enter
+			userInput[userInputPos] = '\0';
+			userInputPos = 0;
+			myHAL_UART_printf("entered: (%s) \r\n", userInput);
+
+		}
+
+		HAL_UART_Transmit(&huart2, &r, 1, HAL_MAX_DELAY);
+
+		USART2->ISR &= ~(USART_ISR_RXNE); // clear the flag
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /**
   * @brief System Clock Configuration
