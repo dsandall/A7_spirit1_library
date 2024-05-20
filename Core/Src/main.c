@@ -240,15 +240,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 
 //TX//////////////
-#define TX_Q_SIZE 3
+#define TX_Q_SIZE 16
 Payload TXq[TX_Q_SIZE];
-int currentReadTX;
-int currentWriteTX;
+uint8_t currentReadTX;
+uint8_t currentWriteTX;
 
-#define RX_Q_SIZE 3
-Payload RXq[RX_Q_SIZE];
-int currentReadRX;
-int currentWriteRX;
+#define RX_Q_SIZE 16
+ReceivedPayload RXq[RX_Q_SIZE];
+uint8_t currentReadRX;
+uint8_t currentWriteRX;
 
 void confirm_TX(){
 
@@ -359,30 +359,49 @@ void reapUsers(){
 ReceivedPayload currentRX;
 void get_RX(){
 
-	//get payload info and sanitize payloads
-	uint16_t rxLen = SPSGRF_GetRxData((uint8_t *) &currentRX.raw);
-	currentRX.raw[rxLen+1] = '\0'; //ensure null termination for bad little nodes
+	//put into queue
+	int mine = currentWriteRX;
+	currentWriteRX = (++currentWriteRX) %RX_Q_SIZE;
 
-	currentRX.dest = SpiritPktStackGetReceivedDestAddress();
-	currentRX.source = SpiritPktStackGetReceivedSourceAddress();
-	currentRX.valid = 1;
-	currentRX.t = xTaskGetTickCount();
+
+	//get payload info and sanitize payloads
+	uint16_t rxLen = SPSGRF_GetRxData((uint8_t *) &RXq[mine].raw);
+	RXq[mine].raw[rxLen+1] = '\0'; //ensure null termination for bad little nodes
+
+	RXq[mine].dest = SpiritPktStackGetReceivedDestAddress();
+	RXq[mine].source = SpiritPktStackGetReceivedSourceAddress();
+	RXq[mine].valid = 1;
+	RXq[mine].t = xTaskGetTickCount();
 
 	//update with RX time
-	usersOnline[currentRX.source].timeLastSeen = currentRX.t;
+	usersOnline[RXq[mine].source].timeLastSeen = RXq[mine].t;
 
 	//todo: add RX packet to queue, handle_rx LATER
-	handle_RX(&currentRX);
+	handle_RX();
+//	handle_RX(&RXq[mine]);
 
 }
 
-void handle_RX(ReceivedPayload* load){
+void handle_RX(){
 	//check if private or broadcast
+
+	uint8_t mine = currentReadRX; 					//take currentReadRX
+	currentReadRX = (++currentReadRX) %RX_Q_SIZE;	//increment currentReadRX
+	ReceivedPayload* load = &RXq[mine];				//set load
+
+
 	bool private = false;
 	if (load->dest == SpiritPktStackGetBroadcastAddress()){
 		private = true;
 		HAL_UART_Transmit(&huart2, PRIVATE_TEXT_COLOR, 8, HAL_MAX_DELAY);//set text color
 	}
+
+
+	//set username if the username is to spec
+	if(strlen(&load->raw[1])<=21){
+		strcpy(&usersOnline[load->source].username, &load->raw[1]);
+	}
+
 
 	//if announcement, send ack
 	//if ack, do nothing
@@ -392,7 +411,7 @@ void handle_RX(ReceivedPayload* load){
 
 	if(load->raw[0] == PACKET_ANNOUNCEMENT){
 		// send ack
-		myHAL_UART_printf("Announcement: (%s)0x%02X has Joined\r\n", &load->raw[1], load->source);
+		myHAL_UART_printf("Announcement: (%s)0x%02X has Joined\r\n", &usersOnline[load->source].username, load->source);
 
 		createPayload(PACKET_ANNOUNCEMENT_RESP, myUsername, NULL, load->source);
 
@@ -423,9 +442,6 @@ void handle_RX(ReceivedPayload* load){
 	if(private){
 		HAL_UART_Transmit(&huart2, DEFAULT_TEXT_COLOR, 8, HAL_MAX_DELAY);//set color to white
 	}
-
-//	usersOnline[sadd].address = sadd;
-	strcpy(&usersOnline[load->source].username, &load->raw[1]);
 }
 
 
@@ -434,7 +450,6 @@ void Task_RX(void *argument){
 		if(xSemaphoreTake(FLAG_SPIRIT, 10) == 1){
 		  SPSGRF_StartRx();
 		}
-//		vTaskDelay(10);
 	}
 }
 /* USER CODE END 0 */
