@@ -42,7 +42,7 @@ void Task_TX(void *argument);
 void Task_printUsers(void *argument);
 void Task_RX(void *argument);
 
-TaskHandle_t Task_TXHandler, Task_RXHandler, Task_HBHandler;
+TaskHandle_t Task_TXHandler, Task_RXHandler, Task_HBHandler, Task_HandleUpdatesHandler;
 SemaphoreHandle_t FLAG_SPIRIT;
 
 void RTOS_ISR_setPriority(uint32_t IRQn){
@@ -377,7 +377,6 @@ void get_RX(){
 	usersOnline[RXq[mine].source].timeLastSeen = RXq[mine].t;
 
 	//todo: add RX packet to queue, handle_rx LATER
-	handle_RX();
 //	handle_RX(&RXq[mine]);
 
 }
@@ -385,62 +384,68 @@ void get_RX(){
 void handle_RX(){
 	//check if private or broadcast
 
-	uint8_t mine = currentReadRX; 					//take currentReadRX
-	currentReadRX = (++currentReadRX) %RX_Q_SIZE;	//increment currentReadRX
-	ReceivedPayload* load = &RXq[mine];				//set load
+	if(RXq[currentReadRX].valid){
+
+		uint8_t mine = currentReadRX; 					//take currentReadRX
+		currentReadRX = (++currentReadRX) %RX_Q_SIZE;	//increment currentReadRX
+		ReceivedPayload* load = &RXq[mine];				//set load
+
+		load->valid = 0; //invalidate the oad
 
 
-	bool private = false;
-	if (load->dest == SpiritPktStackGetBroadcastAddress()){
-		private = true;
-		HAL_UART_Transmit(&huart2, PRIVATE_TEXT_COLOR, 8, HAL_MAX_DELAY);//set text color
-	}
-
-
-	//set username if the username is to spec
-	if(strlen(&load->raw[1])<=21){
-		strcpy(&usersOnline[load->source].username, &load->raw[1]);
-	}
-
-
-	//if announcement, send ack
-	//if ack, do nothing
-	//if heartbeat, do nothing
-	//if message, print message
-	//and check for bad payloads
-
-	if(load->raw[0] == PACKET_ANNOUNCEMENT){
-		// send ack
-		myHAL_UART_printf("Announcement: (%s)0x%02X has Joined\r\n", &usersOnline[load->source].username, load->source);
-
-		createPayload(PACKET_ANNOUNCEMENT_RESP, myUsername, NULL, load->source);
-
-	} else if (load->raw[0] == PACKET_MESSAGE) {
-		//print message
-		char* i = (char*)load->raw;
-		while(*i != '\0'){i++;}
-		i++;
-
-		myHAL_UART_printf("Message from 0x%02X(%s): %s\r\n", load->source, names[load->source], i);
-
-	} else if ((load->raw[0] == PACKET_ANNOUNCEMENT_RESP) | (load->raw[0] == PACKET_HEARTBEAT)){
-		//do nothing
-		if(load->raw[0] == PACKET_HEARTBEAT){
-			if (SHOW_OTHER_HEARTBEATS) {myHAL_UART_printf("<3beat from 0x%02X\r\n", load->source);}
-		} else {
-			myHAL_UART_printf("ACK by 0x%02X\r\n", load->source);
+		bool private = false;
+		if (load->dest == SpiritPktStackGetBroadcastAddress()){
+			private = true;
+			HAL_UART_Transmit(&huart2, PRIVATE_TEXT_COLOR, 8, HAL_MAX_DELAY);//set text color
 		}
 
-	} else{
-		//todo:untested case
-		myHAL_UART_printf("Bad Packet(%02X:%02X:%02X:%02X) from 0x%02X(%d)(%s)\r\n",
-				load->raw[0], load->raw[1], load->raw[2], load->raw[3],
-				load->source, load->source, names[load->source]);
-		return;
-	}
 
-	if(private){
-		HAL_UART_Transmit(&huart2, DEFAULT_TEXT_COLOR, 8, HAL_MAX_DELAY);//set color to white
+		//set username if the username is to spec
+		if(strlen(&load->raw[1])<=21){
+			strcpy(&usersOnline[load->source].username, &load->raw[1]);
+		}
+
+
+		//if announcement, send ack
+		//if ack, do nothing
+		//if heartbeat, do nothing
+		//if message, print message
+		//and check for bad payloads
+
+		if(load->raw[0] == PACKET_ANNOUNCEMENT){
+			// send ack
+			myHAL_UART_printf("Announcement: (%s)0x%02X has Joined\r\n", &usersOnline[load->source].username, load->source);
+
+			createPayload(PACKET_ANNOUNCEMENT_RESP, myUsername, NULL, load->source);
+
+		} else if (load->raw[0] == PACKET_MESSAGE) {
+			//print message
+			char* i = (char*)load->raw;
+			while(*i != '\0'){i++;}
+			i++;
+
+			myHAL_UART_printf("Message from 0x%02X(%s): %s\r\n", load->source, names[load->source], i);
+
+		} else if ((load->raw[0] == PACKET_ANNOUNCEMENT_RESP) | (load->raw[0] == PACKET_HEARTBEAT)){
+			//do nothing
+			if(load->raw[0] == PACKET_HEARTBEAT){
+				if (SHOW_OTHER_HEARTBEATS) {myHAL_UART_printf("<3beat from 0x%02X\r\n", load->source);}
+			} else {
+				myHAL_UART_printf("ACK by 0x%02X\r\n", load->source);
+			}
+
+		} else{
+			//todo:untested case
+			myHAL_UART_printf("Bad Packet(%02X:%02X:%02X:%02X) from 0x%02X(%d)(%s)\r\n",
+					load->raw[0], load->raw[1], load->raw[2], load->raw[3],
+					load->source, load->source, names[load->source]);
+			return;
+		}
+
+		if(private){ HAL_UART_Transmit(&huart2, DEFAULT_TEXT_COLOR, 8, HAL_MAX_DELAY); }	//set color to white
+
+
+
 	}
 }
 
@@ -452,8 +457,13 @@ void Task_RX(void *argument){
 		}
 	}
 }
-/* USER CODE END 0 */
 
+void Task_HandleUpdates(void *argument){
+	while(1){
+		handle_RX();
+		vTaskDelay(10);
+	}
+}
 
 
 
@@ -513,40 +523,39 @@ void createPayload(int type, char* username, char* message, uint8_t dest){
 int main(void)
 {
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	HAL_Init();
 
-  /* Configure the system cloc */
-  SystemClock_Config();
+	/* Configure the system clock */
+	SystemClock_Config();
 
+	/* Create the tasks */
+	BaseType_t retVal = xTaskCreate(Task_TX, "Task_TX", configMINIMAL_STACK_SIZE,
+		NULL, tskIDLE_PRIORITY + 4, &Task_TXHandler);
+	if (retVal != 1) { while(1);}	// check if task creation failed
 
-  RTOS_ISR_setPriority(EXTI9_5_IRQn);
+	retVal = xTaskCreate(Task_RX, "Task_RX", configMINIMAL_STACK_SIZE,
+		NULL, tskIDLE_PRIORITY + 3, &Task_RXHandler);
+	if (retVal != 1) { while(1);}	// check if task creation failed
 
+	retVal = xTaskCreate(Task_BeatHeart, "Task_BeatHeart", configMINIMAL_STACK_SIZE,
+		NULL, tskIDLE_PRIORITY + 2, &Task_HBHandler);
+	if (retVal != 1) { while(1);}	// check if task creation failed
 
-  /* Create the tasks */
-  BaseType_t retVal = xTaskCreate(Task_TX, "Task_TX", configMINIMAL_STACK_SIZE,
-  		NULL, tskIDLE_PRIORITY + 4, &Task_TXHandler);
-  if (retVal != 1) { while(1);}	// check if task creation failed
+	retVal = xTaskCreate(Task_HandleUpdates, "Task_HandleUpdates", configMINIMAL_STACK_SIZE,
+		NULL, tskIDLE_PRIORITY + 2, &Task_HandleUpdatesHandler);
+	if (retVal != 1) { while(1);}	// check if task creation failed
 
-  retVal = xTaskCreate(Task_RX, "Task_RX", configMINIMAL_STACK_SIZE,
-  		NULL, tskIDLE_PRIORITY + 3, &Task_RXHandler);
-  if (retVal != 1) { while(1);}	// check if task creation failed
-
-  retVal = xTaskCreate(Task_BeatHeart, "Task_BeatHeart", configMINIMAL_STACK_SIZE,
-  		NULL, tskIDLE_PRIORITY + 3, &Task_HBHandler);
-  if (retVal != 1) { while(1);}	// check if task creation failed
-
-
-  // Create Binary Semaphore
-  FLAG_SPIRIT = xSemaphoreCreateBinary();
-  if (FLAG_SPIRIT == NULL) { while(1); }
-
+	// Create Binary Semaphore
+	FLAG_SPIRIT = xSemaphoreCreateBinary();
+	if (FLAG_SPIRIT == NULL) { while(1); }
 
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_SPI1_Init();
-  MX_USART2_UART_Init();
+
+	/* Initialize all configured peripherals */
+	MX_GPIO_Init();
+	MX_SPI1_Init();
+	MX_USART2_UART_Init();
 
 	//	enable interrupts for USART2 receive
 	USART2->CR1 |= USART_CR1_RXNEIE;					// enable RXNE interrupt on USART2
@@ -558,25 +567,25 @@ int main(void)
 	HAL_UART_Transmit(&huart2, DEFAULT_TEXT_COLOR, 8, HAL_MAX_DELAY);//set color to white
 
 
-  SPSGRF_Init();
+	SPSGRF_Init();
 
 
 
 
 
-//  impersonate(LOGON_USER_ADDRESS);
-//  strcpy(myUsername, LOGON_USERNAME);
+	//  impersonate(LOGON_USER_ADDRESS);
+	//  strcpy(myUsername, LOGON_USERNAME);
 
 
-  //Queue initial Announcement Packet, get start time, set semaphore
-  createPayload(PACKET_ANNOUNCEMENT, myUsername, NULL, 0xFF);
-  startTime = xTaskGetTickCount();
-  xSemaphoreGive(FLAG_SPIRIT);
+	//Queue initial Announcement Packet, get start time, set semaphore
+	createPayload(PACKET_ANNOUNCEMENT, myUsername, NULL, 0xFF);
+	startTime = xTaskGetTickCount();
+	xSemaphoreGive(FLAG_SPIRIT);
 
-  myHAL_UART_clear();
-  myHAL_UART_printf("RTOS NET ONLINE\r\n");
+	myHAL_UART_clear();
+	myHAL_UART_printf("RTOS NET ONLINE\r\n");
 
-  vTaskStartScheduler();
+	vTaskStartScheduler();
 }
 
 
@@ -700,30 +709,6 @@ void handleCommand(char* input){
 	}
 
 }
-
-void split_string(const char *input_str, int *integer_value, char **message) {
-    if (input_str[0] == '/' && input_str[1] == 'p') {
-        char hex_str[3];
-        hex_str[0] = input_str[2];
-        hex_str[1] = input_str[3];
-        hex_str[2] = '\0';
-
-        *integer_value = strtol(hex_str, NULL, 16);
-
-        *message = strdup(input_str + 5);  // Skip "/pXX "
-    } else {
-        *integer_value = -1;
-        *message = NULL;
-    }
-}
-
-
-
-
-
-
-
-
 
 
 

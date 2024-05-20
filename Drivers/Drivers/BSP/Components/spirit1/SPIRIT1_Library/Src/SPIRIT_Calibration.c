@@ -233,8 +233,7 @@ uint8_t SpiritCalibrationGetVcoCalData(void)
   /* Reads the register value */
   g_xStatus = SpiritSpiReadRegisters(RCO_VCO_CALIBR_OUT0_BASE, 1, &tempRegValue);
 
-  /* Build and returns the VCO calibration data value */
-  return (tempRegValue & 0x7F);
+  /* Build and returns the VCO calibration data value */  return (tempRegValue & 0x7F);
 
 }
 
