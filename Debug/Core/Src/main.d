@@ -41,7 +41,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h \
  ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h \
  ../Core/Inc/spi.h ../Core/Inc/main.h ../Core/Inc/usart.h \
- ../Core/Inc/gpio.h ../Core/Inc/queue.h \
+ ../Core/Inc/gpio.h \
  C:/Users/thebu/STM32CubeIDE/workspace_anotherNewRTOS/A7_spirit1_library/Drivers/Drivers/BSP/Components/spirit1/SPIRIT1_Library/Inc/SPIRIT_Config.h \
  C:/Users/thebu/STM32CubeIDE/workspace_anotherNewRTOS/A7_spirit1_library/Drivers/Drivers/BSP/Components/spirit1/SPIRIT1_Library/Inc/SPIRIT_Regs.h \
  C:/Users/thebu/STM32CubeIDE/workspace_anotherNewRTOS/A7_spirit1_library/Drivers/Drivers/BSP/Components/spirit1/SPIRIT1_Library/Inc/SPIRIT_Aes.h \
@@ -114,7 +114,6 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/main.h:
 ../Core/Inc/usart.h:
 ../Core/Inc/gpio.h:
-../Core/Inc/queue.h:
 C:/Users/thebu/STM32CubeIDE/workspace_anotherNewRTOS/A7_spirit1_library/Drivers/Drivers/BSP/Components/spirit1/SPIRIT1_Library/Inc/SPIRIT_Config.h:
 C:/Users/thebu/STM32CubeIDE/workspace_anotherNewRTOS/A7_spirit1_library/Drivers/Drivers/BSP/Components/spirit1/SPIRIT1_Library/Inc/SPIRIT_Regs.h:
 C:/Users/thebu/STM32CubeIDE/workspace_anotherNewRTOS/A7_spirit1_library/Drivers/Drivers/BSP/Components/spirit1/SPIRIT1_Library/Inc/SPIRIT_Aes.h:
