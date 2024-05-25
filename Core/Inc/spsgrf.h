@@ -14,8 +14,10 @@
 /* Includes ------------------------------------------------------------------*/
 #include "SPIRIT_Config.h"
 
+#ifndef INC_ADDRESS_LIST_H
+#define INC_ADDRESS_LIST_H
 #include "addressList.h"
-
+#endif
 
 /* Exported constants --------------------------------------------------------*/
 #define XTAL_FREQUENCY              50000000

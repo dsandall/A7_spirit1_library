@@ -33,7 +33,3 @@
 #define	J_SHAFFER	0x3F
 #define	M_WONG		0xA0
 #define DEEZ_NUTZ 	0x69
-
-#include <stdio.h>
-
-#define MAX_INDEX 0xC9
