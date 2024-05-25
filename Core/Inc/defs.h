@@ -42,6 +42,8 @@
 #define SHOW_MY_ANNOUNCEMENTS 0
 #define SHOW_MY_ACKS 0
 #define SHOW_PAYLOAD_INFO 0
+#define SHOW_BAD_PACKETS 0
+#define SHOW_OTHER_ACKS 0
 
 #define CARDIAC_ARREST 0 //send huge heartbeats to see if everyone null terminated properly
 

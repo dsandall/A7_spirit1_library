@@ -8,7 +8,8 @@ void Task_TX(void *argument);
 void Task_RX(void *argument);
 void Task_HandleUpdates(void *argument);
 void Task_BeatHeart(void *argument);
-TaskHandle_t Task_TXHandler, Task_RXHandler, Task_HBHandler, Task_HandleUpdatesHandler;
+TaskHandle_t Task_TXHandler, Task_RXHandler,
+	Task_HBHandler, Task_HandleUpdatesHandler;
 
 void confirm_TX();
 void handle_RX();
@@ -39,8 +40,13 @@ uint8_t skinSuit;
 
 
 
-
-
+///////// SPIRIT INTERRUPT ///////////////
+/* This is the interrupt triggered by various Spirit Transmitter events.
+ * Interrupt types used include transmission sent and recieve ready
+ *
+ * In all cases, the interrupt is recieved and handled by a minimal function.
+ * The Spirit Semaphore is then released, and the ISR yields.
+ */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	SpiritIrqs xIrqStatus;
@@ -62,16 +68,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		xSemaphoreGiveFromISR(Flag_Spirit, &xHigherPriorityTaskWoken);
 	}
 
-	if (xIrqStatus.IRQ_RX_TIMEOUT){
-		myHAL_UART_printf("timeout\r\n");
-	}
-
 	SpiritIrqClearStatus();
 	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
 
-
+///////// UART INTERRUPT ///////////////
+/* This is the interrupt triggered by reception of a UART character
+ *
+ * In the case of a standard character, it is added to a user input string.
+ * In the case of an enter, the command is handled appropriately.
+ * In the case of a backspace, the previous character is deleted.
+ *
+ * In all cases, the uart character is echoed back to the user's output.
+ */
 char userInput[100];
 uint8_t userInputPos = 0;
 void USART2_IRQHandler(void){
@@ -116,7 +126,13 @@ void USART2_IRQHandler(void){
 
 
 
-
+///////// TX TASK ///////////////
+/* This task checks a queue and send the associated transmission if one is available.
+ * If a transmission is waiting, it forces the Spirit to abort, takes the semaphore,
+ *  and begins transmission.
+ *
+ * A delay of 50 ticks is used to ensure that no data receptions are missed.
+ */
 void Task_TX(void *argument){
 	char loadString[100]; //NOT a string
 	while (1)
@@ -135,8 +151,10 @@ void Task_TX(void *argument){
 				loadString[0] = type;
 				strcpy(&loadString[1], myUsername);
 				if (type == 4){
-					strcpy(&loadString[strlen(myUsername)+1+1], TXq[currentReadTX].message);
-					len = 1+ strlen(myUsername)+1+1+strlen(TXq[currentReadTX].message);
+					strcpy(&loadString[strlen(myUsername)+1+1],
+						TXq[currentReadTX].message);
+					len = 3 + strlen(myUsername)
+						+ strlen(TXq[currentReadTX].message);
 				}
 
 				TXq[currentReadTX].valid = 0;
@@ -152,7 +170,11 @@ void Task_TX(void *argument){
 }
 
 
-
+///////// Task RX ///////////////
+/* This task simply takes the semaphore and puts the spirit into recieve mode.
+ * There is no delay, as this function should run continuously if nothing interrupts it.
+ * It has a lower priority than TX, and relies on TX not endlessly blocking.
+ */
 void Task_RX(void *argument){
 	while(1){
 		if(xSemaphoreTake(Flag_Spirit, 10) == 1){
@@ -162,7 +184,10 @@ void Task_RX(void *argument){
 }
 
 
-
+///////// Task HandleUpdates ///////////////
+/* This task checks for any RX packets, dead users, or special commands.
+ * If something is available, it will handle it appropriately with a function call.
+ */
 void Task_HandleUpdates(void *argument){
 	while(1){
 
@@ -178,7 +203,9 @@ void Task_HandleUpdates(void *argument){
 }
 
 
-
+///////// Task BeatHeats ///////////////
+/* This task queues a heartbeat transmission, and delays for the heartbeat period.
+ */
 void Task_BeatHeart(void *argument){
 	vTaskDelay(HEARTBEAT_TIME * 1000);
 	while(1){
@@ -191,10 +218,14 @@ void Task_BeatHeart(void *argument){
 	}
 }
 
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
+
+
+///////// Main ///////////////
+/* The main function initializes all necessary peripherals, sets up tasks and semaphores,
+ *   and starts the scheduler.
+ *
+ * It also prints the user guide to the terminal, and queues the announcement packet.
+ */
 int main(void)
 {
 
@@ -233,8 +264,8 @@ int main(void)
 	MX_USART2_UART_Init();
 
 	//	enable interrupts for USART2 receive
-	USART2->CR1 |= USART_CR1_RXNEIE;				// enable RXNE interrupt on USART2
-	USART2->ISR &= ~(USART_ISR_RXNE);				// clear interrupt flagwhile (message[i] != 0)
+	USART2->CR1 |= USART_CR1_RXNEIE;		// enable RXNE interrupt on USART2
+	USART2->ISR &= ~(USART_ISR_RXNE);		// clear interrupt flagwhile (message[i] != 0)
 
 	NVIC->ISER[1] = (1 << (USART2_IRQn & 0x1F));	// enable USART2 ISR
 	__enable_irq();
@@ -269,7 +300,10 @@ int main(void)
 
 
 
-
+///////// createPayload ///////////////
+/* this function queues a transmission, given all necessary info for the payload.
+ * It stores not just the payload itself, but the destination for the payload as well.
+ */
 void createPayload(int type, char* username, char* message, uint8_t dest){
 
 	int myWriteTX = currentWriteTX;
@@ -287,7 +321,10 @@ void createPayload(int type, char* username, char* message, uint8_t dest){
 }
 
 
-
+///////// confirmTX ///////////////
+/* this function is called upon finishing a transmission,
+ *   and prints an associated message to the terminal.
+ */
 void confirm_TX(){
 
 	switch (TXq[currentReadTX].type){
@@ -345,7 +382,12 @@ void confirm_TX(){
 
 
 
-
+///////// getRX ///////////////
+/* this function is called as soon as a payload is recieved, and queues the payload to be handled.
+ * It does minimal packet sanitization, and stores the time that a packet is recieved,
+ *    in the event it is handled much later than reception.
+ * The user table is also updated upon reception of a packet.
+ */
 void get_RX(){
 
 	//put into queue
@@ -369,13 +411,19 @@ void get_RX(){
 
 
 
-
+///////// handleRX ///////////////
+/* this function is called by Task_HandleUpdates, and handles different packets accordingly.
+ * It checks the RX packet queue, and selects a print color according to the destination address (broadcast or private)
+ * Heartbeats, Acknowledgements, and messages are all printed, if the user option designates.
+ * Announcements are printed, but also queues an Acknowledgement transmission.
+ * Bad packets are printed, but labelled as such. This can be disabled in the user options.
+ */
 void handle_RX(){
 	//check if private or broadcast
 
 	if(RXq[currentReadRX].valid){
 
-		uint8_t mine = currentReadRX; 					//take currentReadRX
+		uint8_t mine = currentReadRX; 				//take currentReadRX
 		currentReadRX = (currentReadRX+1) %RX_Q_SIZE;	//increment currentReadRX
 
 		ReceivedPayload* load = &RXq[mine];				//set load
@@ -386,7 +434,8 @@ void handle_RX(){
 		bool private = false;
 		if (load->dest == SpiritPktStackGetBroadcastAddress()){
 			private = true;
-			HAL_UART_Transmit(&huart2, (uint8_t*) PRIVATE_TEXT_COLOR, 8, HAL_MAX_DELAY);//set text color
+			HAL_UART_Transmit(&huart2, (uint8_t*) PRIVATE_TEXT_COLOR,
+				8, HAL_MAX_DELAY);//set text color
 		}
 
 
@@ -420,21 +469,28 @@ void handle_RX(){
 				load->source, getName(load->source), i
 			);
 
-		} else if ((load->raw[0] == PACKET_ANNOUNCEMENT_RESP) | (load->raw[0] == PACKET_HEARTBEAT)){
+		} else if (
+				(load->raw[0] == PACKET_ANNOUNCEMENT_RESP)
+				| (load->raw[0] == PACKET_HEARTBEAT)
+			){
 			//do nothing
 			if(load->raw[0] == PACKET_HEARTBEAT){
 				#if SHOW_OTHER_HEARTBEATS
 					myHAL_UART_printf("<3beat from 0x%02X\r\n", load->source);
 				#endif
 			} else {
+				#if SHOW_OTHER_ACKS
 				myHAL_UART_printf("ACK by 0x%02X\r\n", load->source);
+				#endif
 			}
 
 		} else{
+			#if SHOW_BAD_PACKETS
 			myHAL_UART_printf("Bad Packet(%02X:%02X:%02X:%02X) from 0x%02X(%d)(%s)\r\n",
 				load->raw[0], load->raw[1], load->raw[2], load->raw[3],
 				load->source, load->source, getName(load->source)
 			);
+			#endif
 		}
 
 		if(private){  //set color to white
@@ -451,9 +507,10 @@ void handle_RX(){
 
 
 
-
-//USER LIST/////////////
-
+///////// printUsersOnline ///////////////
+/* this function checks the userlist for any online users, and prints them in address order.
+ * It also prints the user information, as this can change at runtime, and is helpful to know.
+ */
 void printUsersOnline(){
 	TickType_t currentTime = xTaskGetTickCount();
 	myHAL_UART_printf("--- Users Online @t=%d:\r\n", (currentTime-startTime)/1000);
@@ -472,6 +529,11 @@ void printUsersOnline(){
 }
 
 
+
+///////// reapUsers ///////////////
+/* this function checks the userlist for any users that have not been seen in USER_DEAD_TIME seconds.
+ * They are subsequently removed.
+ */
 void reapUsers(){
 	TickType_t currentTime = xTaskGetTickCount();
 	for (int i = 0; i < MAX_USERS; i++){
@@ -489,8 +551,20 @@ void reapUsers(){
 
 
 
-/////// HANDLING USER INPUT /////////////////////////////////////////////////////////////
-
+///////// handleCommand ///////////////
+/* this function recieves a user command string, and handles it accordingly.
+ *
+ * it can:
+ * print the users online
+ * queue broadcast message
+ * queue private message
+ * change the user address and username to another person on or off the network
+ * send clear screen to all other nodes
+ * send a virus to all on the network
+ * and respond to improperly formatted commands
+ *
+ * if no / is given, it assumes the command is a broadcast message.
+ */
 void handleCommand(char* input){
 	//this is after the string has been entered and the user hits enter
 	myHAL_UART_printf(">>> entered: (%s) \r\n", userInput);
@@ -505,7 +579,8 @@ void handleCommand(char* input){
 				break;
 
 			case 'b':	//broadcast message
-				createPayload(PACKET_MESSAGE, myUsername, &userInput[3], BROADCAST_ADDRESS);
+				createPayload(PACKET_MESSAGE, myUsername,
+					&userInput[3], BROADCAST_ADDRESS);
 				break;
 
 			case 'p':	//private message
@@ -527,7 +602,8 @@ void handleCommand(char* input){
 				break;
 
 			case 'n':	//Send clear screen to all other nodes
-				createPayload(PACKET_MESSAGE, myUsername, CLEAR_SCREEN, BROADCAST_ADDRESS);
+				createPayload(PACKET_MESSAGE, myUsername,
+					CLEAR_SCREEN, BROADCAST_ADDRESS);
 				break;
 
 			case 'v': 	//send an announcement from 0xFF, triggering a broadcast ACK
@@ -552,7 +628,10 @@ void handleCommand(char* input){
 
 
 
-
+///////// impersonate ///////////////
+/* this function changes the user address and username to another person on or off the network.
+ * It must not be called in an interrupt, and as such is handled by Task_HandleUpdates.
+ */
 void impersonate(){
 	//change username and address to a desired person's
 	SpiritChangeAddress(skinSuit);
@@ -568,6 +647,10 @@ void impersonate(){
 	skinSuit = 0; //clear skinSuit flag, avoids unnecessary calling of the above functions
 }
 
+
+///////// virus ///////////////
+/* this function sends an announcement from 0xFF, forcing all recievers to send an acknowledgement to broadcast.
+ */
 void virus(){
 	spreadVirus = 0;
 	skinSuit = BROADCAST_ADDRESS;

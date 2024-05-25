@@ -59,7 +59,10 @@ char* getName(uint16_t add){
 
 //////////// FREERTOS FUNCTIONS ////////////////////
 
-
+///////// impersonate ///////////////
+/* this function sets the interrupt priority of a
+ *    given interrupt to a FreeRTOS acceptable value
+*/
 void RTOS_ISR_setPriority(uint32_t IRQn){
 	HAL_NVIC_SetPriorityGrouping(0);
 	uint32_t lowPriority = NVIC_EncodePriority(0, 10, 0);
@@ -71,6 +74,9 @@ void RTOS_ISR_setPriority(uint32_t IRQn){
 
 //////////// UART FUNCTIONS /////////////////////////////
 
+///////// myHAL_UART_printf ///////////////
+/* this is printf, but for UART
+*/
 void myHAL_UART_printf(const char* format, ...) {
 	va_list args;
 	va_start(args, format);
@@ -91,6 +97,11 @@ void myHAL_UART_printf(const char* format, ...) {
 	va_end(args);
 }
 
+
+///////// myHAL_UART_reset ///////////////
+/* this clears the screen, resets the background and text color,
+ *     and sets the cursor to the top left for UART terminals.
+*/
 void myHAL_UART_reset(){
 	char reset[] = "\x1B[2J\x1B[0m\x1B[H"; // clear
 	HAL_UART_Transmit(&huart2, reset, strlen(reset), HAL_MAX_DELAY);
@@ -100,8 +111,12 @@ void myHAL_UART_reset(){
 
 
 ////////// SPIRIT FUNCTIONS /////////////////////////
+
 SemaphoreHandle_t Flag_Spirit;
 
+///////// SpiritGotoReadyState ///////////////
+/* this forces the spirit into ready state
+*/
 void SpiritGotoReadyState(void) {
   static unsigned int i;
   /* Wait for the radio to enter the ready state */
@@ -122,7 +137,9 @@ void SpiritGotoReadyState(void) {
   xSemaphoreGive(Flag_Spirit);
 }
 
-
+///////// SpiritChangeAddress ///////////////
+/* this changes the address of the spirit. Must not be called from an interrupt.
+*/
 void SpiritChangeAddress(uint8_t address){
 	SpiritGotoReadyState();
 
