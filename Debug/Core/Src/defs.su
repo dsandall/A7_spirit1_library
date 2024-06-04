@@ -1,8 +1,8 @@
 ../Drivers/CMSIS/Include/core_cm4.h:1809:22:__NVIC_SetPriority	16	static
 ../Drivers/CMSIS/Include/core_cm4.h:1856:26:NVIC_EncodePriority	40	static
 ../Core/Src/defs.c:49:7:getName	16	static
-../Core/Src/defs.c:63:6:RTOS_ISR_setPriority	24	static
-../Core/Src/defs.c:74:6:myHAL_UART_printf	16	static
-../Core/Src/defs.c:94:6:myHAL_UART_reset	24	static
-../Core/Src/defs.c:105:6:SpiritGotoReadyState	8	static
-../Core/Src/defs.c:126:6:SpiritChangeAddress	24	static
+../Core/Src/defs.c:66:6:RTOS_ISR_setPriority	24	static
+../Core/Src/defs.c:80:6:myHAL_UART_printf	16	static
+../Core/Src/defs.c:105:6:myHAL_UART_reset	24	static
+../Core/Src/defs.c:120:6:SpiritGotoReadyState	8	static
+../Core/Src/defs.c:143:6:SpiritChangeAddress	24	static
